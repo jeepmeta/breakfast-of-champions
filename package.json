@@ -10,6 +10,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
     "expo": "~57.0.23",
     "expo-constants": "~57.0.18",
     "expo-haptics": "~57.0.3",
@@ -29,7 +30,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~5.9.2"
   },
   "private": true
 }
