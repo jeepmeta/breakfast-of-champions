@@ -6,6 +6,7 @@ import {
   useColorScheme,
   Pressable,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -34,10 +35,13 @@ export default function RoomLobbyScreen() {
     leave,
     isHost,
     everyoneReady,
+    isLoading,
   } = useRoom();
 
   useEffect(() => {
-    if (routeCode) refresh(String(routeCode));
+    if (routeCode) {
+      void refresh(String(routeCode));
+    }
   }, [routeCode, refresh]);
 
   const self = room?.participants.find((p) => p.id === selfId);
@@ -50,11 +54,11 @@ export default function RoomLobbyScreen() {
     } catch {
       // ignore
     }
-    setReady(!self.is_ready);
+    await setReady(!self.is_ready);
   };
 
   const onLeave = async () => {
-    leave();
+    await leave();
     router.replace('/');
   };
 
@@ -64,7 +68,7 @@ export default function RoomLobbyScreen() {
     } catch {
       // ignore
     }
-    addGuest();
+    await addGuest();
   };
 
   const readyCount =
@@ -118,9 +122,7 @@ export default function RoomLobbyScreen() {
           <Text
             style={[
               styles.readyPillText,
-              {
-                color: item.is_ready ? '#fff' : muted,
-              },
+              { color: item.is_ready ? '#fff' : muted },
             ]}
           >
             {item.is_ready ? 'Ready' : 'Waiting'}
@@ -130,14 +132,24 @@ export default function RoomLobbyScreen() {
     );
   };
 
+  if (!room && isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+        <View style={styles.body}>
+          <ActivityIndicator color={colors.brand.amber[500]} size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!room) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
         <View style={styles.body}>
           <Text style={[styles.title, { color: text }]}>Room not found</Text>
           <Text style={[styles.hint, { color: muted }]}>
-            This code is not active in this session. Create a room or join one
-            that was created on this device (local-first foundation).
+            This code is not active. Ask the host for a fresh code, or create
+            your own room.
           </Text>
           <Pressable onPress={() => router.replace('/')} style={styles.back}>
             <Text style={{ color: colors.brand.amber[500], fontSize: 16 }}>
@@ -160,6 +172,9 @@ export default function RoomLobbyScreen() {
           {readyCount}/{total} ready
           {everyoneReady ? ' · Everyone is ready' : ''}
         </Text>
+        <Text style={[styles.live, { color: colors.brand.emerald[500] }]}>
+          ● Live
+        </Text>
       </View>
 
       <FlatList
@@ -168,9 +183,7 @@ export default function RoomLobbyScreen() {
         renderItem={renderParticipant}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <Text style={[styles.sectionLabel, { color: muted }]}>
-            Players
-          </Text>
+          <Text style={[styles.sectionLabel, { color: muted }]}>Players</Text>
         }
       />
 
@@ -254,6 +267,11 @@ const styles = StyleSheet.create({
   readySummary: {
     marginTop: spacing[1],
     fontSize: 14,
+  },
+  live: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: spacing[1],
   },
   sectionLabel: {
     fontSize: 13,
