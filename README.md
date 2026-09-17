@@ -1,53 +1,38 @@
 # Wafflr (`breakfast-of-champions`)
 
-Sleek, gamified utility + social decision-making platform that eliminates low-stakes decision fatigue, group deadlocks, and choice paralysis.
+Sleek, gamified utility + social decision-making platform.
 
-**Fairness** via randomness + algorithmic consensus · **≤60s sessions** · works from 1-on-1 to 100+ anonymous polls.
+**Fairness** via randomness + consensus · **≤60s sessions** · 1-on-1 to 100+ polls.
 
 ## Stack
 
-- **Expo** + **React Native** (Expo Router, file-based routing)
-- **TypeScript**
-- Real-time: Supabase Realtime / WebSockets (planned)
-- Design system: semantic light/dark tokens (`src/theme`)
-- Physics & haptics: Reanimated + `expo-haptics`
+- Expo SDK 57 + Expo Router
+- React Native 0.86 / React 19.2
+- Reanimated 4 + expo-haptics
+- TypeScript
 
-## Getting started
+## Run
 
 ```bash
 npm install
 npx expo start
 ```
 
-Then press `i` (iOS simulator), `a` (Android), or scan the QR with Expo Go.
+Scan the QR with **Expo Go** (SDK 57).
 
-## Project structure
+## Structure
 
 ```
-src/
-  app/           # (routes live in /app at root for Expo Router)
-  components/    # reusable UI
-  screens/       # screen bodies (optional colocation)
-  hooks/
-  theme/         # design tokens (colors, spacing, radius)
-  types/         # Room, Participant, mode state
-  utils/
+app/                 # Expo Router screens
+  index.tsx          # Home
+  room/[code].tsx    # Room lobby
+  solo/wheel.tsx     # Solo wheel placeholder
+src/theme/           # Design tokens
+src/types/           # Room schemas
 ```
 
-Canonical product specs live in the monorepo / project docs:
+## Core modes (next)
 
-- `design-tokens.md`
-- `animation-haptic-constants.md`
-- `room-state-schemas.md`
-- `sample-item-catalogs.md`
-- `app-store-listing-reference.md`
-
-## Core modes (build order)
-
-1. Real-time multiplayer rooms + mutual-match swipe
-2. Physics chance mechanics (Wheel, Dice, Coin, Dart)
-3. Brackets / series / large polls
-
-## License
-
-Private / proprietary for now.
+1. Real-time multiplayer + swipe match
+2. Physics wheel / dice / coin
+3. Brackets & large polls

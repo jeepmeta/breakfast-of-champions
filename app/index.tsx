@@ -3,8 +3,8 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/tokens';
+import { colors } from '../src/theme/colors';
+import { spacing, radius } from '../src/theme/tokens';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -14,18 +14,30 @@ export default function HomeScreen() {
   const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
 
   const onCreateRoom = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // TODO: create room via Supabase / realtime, then navigate
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      // haptics unavailable on web / simulator without support
+    }
     router.push('/room/WAFFLR');
   };
 
   const onJoinRoom = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO: open join modal / code input
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      // no-op
+    }
+    // Placeholder: same demo room for now
+    router.push('/room/JOINME');
   };
 
   const onSoloWheel = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      // no-op
+    }
     router.push('/solo/wheel');
   };
 

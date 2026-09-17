@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet, useColorScheme, Pressable } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/tokens';
+import { colors } from '../../src/theme/colors';
+import { spacing, radius } from '../../src/theme/tokens';
 
 /**
  * Solo Wafflr Wheel placeholder.
@@ -15,25 +15,19 @@ export default function SoloWheelScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const bg = isDark ? colors.canvas.dark : colors.canvas.light;
-  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
   const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
 
   const onSpin = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    // TODO: trigger wheel physics
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } catch {
+      // no-op
+    }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-      <Stack.Screen
-        options={{
-          title: 'Wafflr Wheel',
-          headerShown: true,
-          headerStyle: { backgroundColor: bg },
-          headerTintColor: text,
-          presentation: 'modal',
-        }}
-      />
+      <Text style={[styles.title, { color: colors.brand.amber[500] }]}>Wafflr Wheel</Text>
 
       <View style={styles.wheelPlaceholder}>
         <Text style={[styles.placeholderLabel, { color: muted }]}>
@@ -52,7 +46,7 @@ export default function SoloWheelScreen() {
       </Pressable>
 
       <Pressable onPress={() => router.back()} style={styles.close}>
-        <Text style={{ color: muted }}>Close</Text>
+        <Text style={{ color: muted, fontSize: 16 }}>Close</Text>
       </Pressable>
     </SafeAreaView>
   );
@@ -63,6 +57,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[6],
     alignItems: 'center',
+  },
+  title: {
+    marginTop: spacing[8],
+    fontSize: 24,
+    fontWeight: '800',
   },
   wheelPlaceholder: {
     width: 280,

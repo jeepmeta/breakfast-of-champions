@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, useColorScheme } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { View, Text, StyleSheet, useColorScheme, Pressable } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/tokens';
+import { colors } from '../../src/theme/colors';
+import { spacing } from '../../src/theme/tokens';
 
 /**
  * Live room lobby / active session.
@@ -19,7 +19,6 @@ export default function RoomScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-      <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <Text style={[styles.label, { color: muted }]}>Room code</Text>
         <Text style={[styles.code, { color: colors.brand.amber[500] }]}>
@@ -33,6 +32,10 @@ export default function RoomScreen() {
           Share the code. Sessions complete in ≤60 seconds once everyone is ready.
         </Text>
       </View>
+
+      <Pressable onPress={() => router.back()} style={styles.back}>
+        <Text style={{ color: muted, fontSize: 16 }}>← Back</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -73,5 +76,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 280,
     lineHeight: 22,
+  },
+  back: {
+    paddingVertical: spacing[4],
+    alignItems: 'center',
+    marginBottom: spacing[4],
   },
 });
