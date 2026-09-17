@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoom } from '../../src/room/RoomContext';
 import type { Participant } from '../../src/types/room';
+import { isSwipeMatchState } from '../../src/types/swipe';
+import type { CatalogItem } from '../../src/data/sample-items';
+import { SwipeDeck } from '../../src/components/swipe/SwipeDeck';
 import { colors } from '../../src/theme/colors';
 import { spacing, radius } from '../../src/theme/tokens';
 
@@ -33,6 +36,9 @@ export default function RoomLobbyScreen() {
     setReady,
     addGuest,
     leave,
+    startGame,
+    castVote,
+    dismissMatch,
     isHost,
     everyoneReady,
     isLoading,
@@ -46,6 +52,35 @@ export default function RoomLobbyScreen() {
 
   const self = room?.participants.find((p) => p.id === selfId);
   const code = room?.code ?? String(routeCode ?? '').toUpperCase();
+  const swipeState = room && isSwipeMatchState(room.state) ? room.state : null;
+
+  const votedIds = useMemo(() => {
+    if (!swipeState || !selfId) return new Set<string>();
+    const ids = new Set<string>();
+    for (const [itemId, votes] of Object.entries(swipeState.votes)) {
+      if (votes.some((v) => v.participant_id === selfId)) ids.add(itemId);
+    }
+    return ids;
+  }, [swipeState, selfId]);
+
+  const nextItem = useMemo(() => {
+    if (!swipeState) return null;
+    return swipeState.items.find((it) => !votedIds.has(it.id)) ?? null;
+  }, [swipeState, votedIds]);
+
+  const remaining = swipeState
+    ? swipeState.items.filter((it) => !votedIds.has(it.id)).length
+    : 0;
+
+  const latestMatch = swipeState?.matches.length
+    ? swipeState.matches[swipeState.matches.length - 1]
+    : null;
+
+  const matchedItem = latestMatch
+    ? (swipeState?.items.find((i) => i.id === latestMatch.item_id)?.payload as
+        | CatalogItem
+        | undefined)
+    : undefined;
 
   const onToggleReady = async () => {
     if (!self) return;
@@ -69,6 +104,15 @@ export default function RoomLobbyScreen() {
       // ignore
     }
     await addGuest();
+  };
+
+  const onStart = async () => {
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      // ignore
+    }
+    await startGame();
   };
 
   const readyCount =
@@ -101,9 +145,6 @@ export default function RoomLobbyScreen() {
             </Text>
             <Text style={[styles.meta, { color: muted }]}>
               {item.is_host ? 'Host' : 'Guest'}
-              {item.connection_status !== 'connected'
-                ? ` · ${item.connection_status}`
-                : ''}
             </Text>
           </View>
         </View>
@@ -152,6 +193,99 @@ export default function RoomLobbyScreen() {
             your own room.
           </Text>
           <Pressable onPress={() => router.replace('/')} style={styles.back}>
+            <Text style={{ color: colors.brand.amber[500], fontSize: 16 }}>
+              ← Home
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (
+    swipeState &&
+    (swipeState.phase === 'celebration' || room.status === 'revealing') &&
+    matchedItem
+  ) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+        <View style={styles.celebrate}>
+          <Text style={styles.celebrateEmoji}>{matchedItem.emoji}</Text>
+          <Text style={[styles.celebrateTitle, { color: colors.brand.emerald[500] }]}>
+            It is a match!
+          </Text>
+          <Text style={[styles.celebrateItem, { color: text }]}>
+            {matchedItem.title}
+          </Text>
+          <Text style={[styles.hint, { color: muted }]}>
+            Everyone agreed. Decision locked in under 60 seconds.
+          </Text>
+          <Pressable
+            onPress={dismissMatch}
+            style={[styles.primaryBtn, { backgroundColor: colors.brand.amber[500] }]}
+          >
+            <Text style={[styles.primaryBtnText, { color: colors.brand.slate[900] }]}>
+              Keep swiping
+            </Text>
+          </Pressable>
+          <Pressable onPress={onLeave} style={styles.back}>
+            <Text style={{ color: muted, fontSize: 16 }}>Done · Leave room</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (
+    room.status === 'active' &&
+    swipeState &&
+    swipeState.phase === 'swiping'
+  ) {
+    if (!nextItem) {
+      return (
+        <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+          <View style={styles.body}>
+            <Text style={[styles.title, { color: text }]}>Waiting on others…</Text>
+            <Text style={[styles.hint, { color: muted }]}>
+              You finished the deck. Hang tight for a match.
+            </Text>
+            <Pressable onPress={onLeave} style={styles.back}>
+              <Text style={{ color: muted, fontSize: 16 }}>Leave room</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+        <View style={styles.swipeHeader}>
+          <Text style={[styles.label, { color: muted }]}>{code}</Text>
+          <Text style={[styles.swipeTitle, { color: text }]}>What are we getting?</Text>
+        </View>
+        <SwipeDeck
+          key={nextItem.id}
+          item={nextItem.payload as CatalogItem}
+          remaining={remaining}
+          onSwipe={(dir) => {
+            void castVote(nextItem.id, dir);
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (room.status === 'completed' || swipeState?.phase === 'finished') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+        <View style={styles.body}>
+          <Text style={[styles.title, { color: text }]}>Session complete</Text>
+          <Text style={[styles.hint, { color: muted }]}>
+            {swipeState?.matches.length
+              ? `Matches: ${swipeState.matches.length}`
+              : 'No mutual matches this round.'}
+          </Text>
+          <Pressable onPress={onLeave} style={styles.back}>
             <Text style={{ color: colors.brand.amber[500], fontSize: 16 }}>
               ← Home
             </Text>
@@ -229,9 +363,26 @@ export default function RoomLobbyScreen() {
           </Text>
         </Pressable>
 
-        {everyoneReady ? (
+        {isHost && everyoneReady ? (
+          <Pressable
+            onPress={onStart}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              {
+                backgroundColor: colors.brand.emerald[500],
+                opacity: pressed ? 0.9 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.primaryBtnText, { color: '#fff' }]}>
+              Start · Swipe Match
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {!isHost && everyoneReady ? (
           <Text style={[styles.startHint, { color: colors.brand.emerald[500] }]}>
-            All ready — game start comes next
+            Waiting for host to start…
           </Text>
         ) : null}
 
@@ -252,6 +403,15 @@ const styles = StyleSheet.create({
     marginTop: spacing[6],
     alignItems: 'center',
     gap: spacing[1],
+  },
+  swipeHeader: {
+    marginTop: spacing[4],
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  swipeTitle: {
+    fontSize: 20,
+    fontWeight: '700',
   },
   label: {
     fontSize: 13,
@@ -332,6 +492,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing[3],
+  },
+  celebrate: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+  },
+  celebrateEmoji: {
+    fontSize: 80,
+  },
+  celebrateTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  celebrateItem: {
+    fontSize: 24,
+    fontWeight: '700',
   },
   title: {
     fontSize: 22,
