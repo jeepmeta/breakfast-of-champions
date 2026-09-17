@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Svg, { G, Path, Circle, Text as SvgText } from 'react-native-svg';
 import Animated, {
@@ -17,15 +17,23 @@ export type WheelSegment = {
   id: string;
   label: string;
   emoji?: string;
-  /** Relative weight (default 1). Higher = larger slice. */
   weight?: number;
   color?: string;
+};
+
+export type ExternalSpin = {
+  nonce: number;
+  velocity: number;
+  startRotation: number;
 };
 
 type Props = {
   segments: WheelSegment[];
   size?: number;
   onSpinEnd?: (segment: WheelSegment, index: number) => void;
+  hideSpinButton?: boolean;
+  externalSpin?: ExternalSpin | null;
+  hideResult?: boolean;
 };
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
@@ -54,7 +62,14 @@ function describeArc(
   ].join(' ');
 }
 
-export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
+export function WafflrWheel({
+  segments,
+  size = 300,
+  onSpinEnd,
+  hideSpinButton = false,
+  externalSpin = null,
+  hideResult = false,
+}: Props) {
   const rotation = useSharedValue(0);
   const velocity = useSharedValue(0);
   const spinning = useSharedValue(false);
@@ -64,9 +79,10 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
   const [isSpinning, setIsSpinning] = useState(false);
   const segmentsRef = useRef(segments);
   segmentsRef.current = segments;
+  const lastNonceRef = useRef<number | null>(null);
 
   const totalWeight = useMemo(
-    () => segments.reduce((sum, s) => sum + (s.weight ?? 1), 0),
+    () => segments.reduce((sum, s) => sum + (s.weight ?? 1), 0) || 1,
     [segments],
   );
 
@@ -98,7 +114,7 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
   const resolveWinner = useCallback((rotDeg: number) => {
     const normalized = ((-rotDeg % 360) + 360) % 360;
     const meta = segmentsRef.current;
-    const tw = meta.reduce((s, x) => s + (x.weight ?? 1), 0);
+    const tw = meta.reduce((s, x) => s + (x.weight ?? 1), 0) || 1;
     let cursor = 0;
     for (let i = 0; i < meta.length; i++) {
       const sweep = ((meta[i].weight ?? 1) / tw) * 360;
@@ -107,7 +123,7 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
       }
       cursor += sweep;
     }
-    return meta.length - 1;
+    return Math.max(0, meta.length - 1);
   }, []);
 
   const finishSpin = useCallback(
@@ -132,6 +148,31 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
       // ignore
     }
   }, []);
+
+  const beginSpin = useCallback(
+    (vel: number, startRot: number) => {
+      setWinnerIndex(null);
+      setIsSpinning(true);
+      rotation.value = startRot;
+      velocity.value = vel;
+      lastTickAngle.value = startRot;
+      didFinish.value = false;
+      spinning.value = true;
+      try {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      } catch {
+        // ignore
+      }
+    },
+    [didFinish, lastTickAngle, rotation, spinning, velocity],
+  );
+
+  useEffect(() => {
+    if (!externalSpin) return;
+    if (lastNonceRef.current === externalSpin.nonce) return;
+    lastNonceRef.current = externalSpin.nonce;
+    beginSpin(externalSpin.velocity, externalSpin.startRotation);
+  }, [externalSpin, beginSpin]);
 
   useFrameCallback(() => {
     'worklet';
@@ -159,33 +200,18 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
 
   const spin = useCallback(() => {
     if (spinning.value || isSpinning) return;
-    setWinnerIndex(null);
-    setIsSpinning(true);
-
-    const { initial_velocity_range, full_rotations_before_decel } = WHEEL_PHYSICS;
-
+    const { initial_velocity_range, full_rotations_before_decel } =
+      WHEEL_PHYSICS;
     const v =
       initial_velocity_range.min +
       Math.random() *
         (initial_velocity_range.max - initial_velocity_range.min);
-
     const extraTurns =
       full_rotations_before_decel.min +
       Math.random() *
         (full_rotations_before_decel.max - full_rotations_before_decel.min);
-
-    rotation.value = rotation.value + extraTurns * 360 * 0.02;
-    velocity.value = v;
-    lastTickAngle.value = rotation.value;
-    didFinish.value = false;
-    spinning.value = true;
-
-    try {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    } catch {
-      // ignore
-    }
-  }, [isSpinning, lastTickAngle, rotation, spinning, velocity, didFinish]);
+    beginSpin(v, rotation.value + extraTurns * 360 * 0.02);
+  }, [beginSpin, isSpinning, rotation, spinning]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
@@ -204,6 +230,11 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
           <G>
             {sliceMeta.map((slice) => {
               const labelPos = polarToCartesian(cx, cy, r * 0.62, slice.mid);
+              const label =
+                slice.emoji ??
+                (slice.label.length > 8
+                  ? slice.label.slice(0, 7) + '…'
+                  : slice.label);
               return (
                 <G key={slice.id}>
                   <Path
@@ -216,12 +247,12 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
                     x={labelPos.x}
                     y={labelPos.y}
                     fill={colors.brand.slate[900]}
-                    fontSize={slice.sweep < 40 ? 11 : 13}
+                    fontSize={slice.sweep < 40 ? 10 : 12}
                     fontWeight="700"
                     textAnchor="middle"
                     alignmentBaseline="middle"
                   >
-                    {slice.emoji ? `${slice.emoji}` : slice.label.slice(0, 8)}
+                    {label}
                   </SvgText>
                 </G>
               );
@@ -249,30 +280,34 @@ export function WafflrWheel({ segments, size = 300, onSpinEnd }: Props) {
         </Svg>
       </Animated.View>
 
-      <Pressable
-        onPress={spin}
-        disabled={isSpinning}
-        style={({ pressed }) => [
-          styles.spinBtn,
-          {
-            opacity: isSpinning ? 0.5 : pressed ? 0.9 : 1,
-            transform: [{ scale: pressed && !isSpinning ? 0.97 : 1 }],
-          },
-        ]}
-      >
-        <Text style={styles.spinBtnText}>
-          {isSpinning ? 'Spinning…' : 'Spin'}
-        </Text>
-      </Pressable>
+      {!hideSpinButton ? (
+        <Pressable
+          onPress={spin}
+          disabled={isSpinning}
+          style={({ pressed }) => [
+            styles.spinBtn,
+            {
+              opacity: isSpinning ? 0.5 : pressed ? 0.9 : 1,
+              transform: [{ scale: pressed && !isSpinning ? 0.97 : 1 }],
+            },
+          ]}
+        >
+          <Text style={styles.spinBtnText}>
+            {isSpinning ? 'Spinning…' : 'Spin'}
+          </Text>
+        </Pressable>
+      ) : null}
 
-      {winner ? (
+      {!hideResult && winner ? (
         <View style={styles.result}>
           <Text style={styles.resultEmoji}>{winner.emoji ?? '✨'}</Text>
           <Text style={styles.resultLabel}>{winner.label}</Text>
         </View>
-      ) : (
+      ) : null}
+
+      {!hideResult && !winner && !hideSpinButton ? (
         <Text style={styles.hint}>Tap Spin — physics decides</Text>
-      )}
+      ) : null}
     </View>
   );
 }
