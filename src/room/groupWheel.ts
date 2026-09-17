@@ -1,5 +1,5 @@
 /**
- * Multiplayer group wheel — participants as segments, tallied wins.
+ * Multiplayer / solo group wheel — catalog items (or people) as segments.
  */
 
 import { supabase } from '../lib/supabase';
@@ -9,6 +9,7 @@ import {
   isGroupWheelState,
   type GroupWheelState,
 } from '../types/group-wheel';
+import type { CatalogItem } from '../data/catalogs';
 import { fetchRoomById } from './supabaseStore';
 import {
   randomSpinVelocity,
@@ -16,17 +17,43 @@ import {
   simulateFinalRotation,
 } from './wheelSim';
 
-export async function startGroupWheel(roomId: string): Promise<Room | null> {
+function segmentIdsFromRoom(room: Room): string[] {
+  const items = room.item_payload as CatalogItem[] | undefined;
+  if (items && items.length > 0) {
+    return items.map((i) => i.id);
+  }
+  return room.participants.map((p) => p.id);
+}
+
+function labelForId(room: Room, id: string): string {
+  const items = room.item_payload as CatalogItem[] | undefined;
+  const item = items?.find((i) => i.id === id);
+  if (item) return item.title;
+  return room.participants.find((p) => p.id === id)?.display_name ?? 'Unknown';
+}
+
+export async function startGroupWheel(
+  roomId: string,
+  items?: CatalogItem[],
+): Promise<Room | null> {
   const room = await fetchRoomById(roomId);
   if (!room) return null;
 
-  const state = emptyGroupWheelState(room.participants.map((p) => p.id));
+  const payload =
+    items && items.length > 0 ? items : (room.item_payload as CatalogItem[]);
+  const ids =
+    payload && payload.length > 0
+      ? payload.map((i) => i.id)
+      : room.participants.map((p) => p.id);
+
+  const state = emptyGroupWheelState(ids);
 
   const { error } = await supabase
     .from('rooms')
     .update({
       status: 'active',
       mode: 'group_wheel',
+      item_payload: payload && payload.length > 0 ? payload : room.item_payload,
       state,
       updated_at: new Date().toISOString(),
     })
@@ -37,21 +64,19 @@ export async function startGroupWheel(roomId: string): Promise<Room | null> {
   return fetchRoomById(roomId);
 }
 
-/** Host starts a physics spin; all clients animate from shared params. */
 export async function hostStartSpin(roomId: string): Promise<Room | null> {
   const room = await fetchRoomById(roomId);
   if (!room || !isGroupWheelState(room.state)) {
     throw new Error('Room is not in group wheel mode');
   }
   if (room.state.phase === 'spinning') return room;
-  if (room.participants.length < 1) {
-    throw new Error('Need at least one participant');
+
+  const ids = segmentIdsFromRoom(room);
+  if (ids.length < 1) {
+    throw new Error('Need at least one segment');
   }
 
-  const segments = room.participants.map((p) => ({
-    id: p.id,
-    weight: 1,
-  }));
+  const segments = ids.map((id) => ({ id, weight: 1 }));
 
   const startRotation = room.state.spin?.final_rotation ?? 0;
   const velocity = randomSpinVelocity();
@@ -85,14 +110,12 @@ export async function hostStartSpin(roomId: string): Promise<Room | null> {
   return fetchRoomById(roomId);
 }
 
-/** After animation completes — lock tally + celebration. */
 export async function completeSpin(roomId: string): Promise<Room | null> {
   const room = await fetchRoomById(roomId);
   if (!room || !isGroupWheelState(room.state)) return null;
   if (room.state.phase !== 'spinning' || !room.state.spin) return room;
 
   const winnerId = room.state.spin.winner_id;
-  const winner = room.participants.find((p) => p.id === winnerId);
   const tallies = { ...room.state.tallies };
   tallies[winnerId] = (tallies[winnerId] ?? 0) + 1;
 
@@ -105,7 +128,7 @@ export async function completeSpin(roomId: string): Promise<Room | null> {
       ...room.state.history,
       {
         winner_id: winnerId,
-        winner_name: winner?.display_name ?? 'Unknown',
+        winner_name: labelForId(room, winnerId),
         at: new Date().toISOString(),
       },
     ],
@@ -124,14 +147,14 @@ export async function completeSpin(roomId: string): Promise<Room | null> {
   return fetchRoomById(roomId);
 }
 
-/** Ready for another spin (keeps tallies). */
 export async function resetForNextSpin(roomId: string): Promise<Room | null> {
   const room = await fetchRoomById(roomId);
   if (!room || !isGroupWheelState(room.state)) return null;
 
+  const ids = segmentIdsFromRoom(room);
   const tallies = { ...room.state.tallies };
-  for (const p of room.participants) {
-    if (tallies[p.id] == null) tallies[p.id] = 0;
+  for (const id of ids) {
+    if (tallies[id] == null) tallies[id] = 0;
   }
 
   const state: GroupWheelState = {
