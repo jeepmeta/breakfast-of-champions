@@ -136,7 +136,7 @@ export default function RoomLobbyScreen() {
         <View style={styles.body}>
           <Text style={[styles.title, { color: text }]}>Room not found</Text>
           <Text style={[styles.hint, { color: muted }]}>
-            This code isn\'t active in this session. Create a room or join one
+            This code is not active in this session. Create a room or join one
             that was created on this device (local-first foundation).
           </Text>
           <Pressable onPress={() => router.replace('/')} style={styles.back}>
@@ -158,7 +158,7 @@ export default function RoomLobbyScreen() {
         </Text>
         <Text style={[styles.readySummary, { color: muted }]}>
           {readyCount}/{total} ready
-          {everyoneReady ? ' · Everyone\'s ready' : ''}
+          {everyoneReady ? ' · Everyone is ready' : ''}
         </Text>
       </View>
 
@@ -212,7 +212,7 @@ export default function RoomLobbyScreen() {
               },
             ]}
           >
-            {self?.is_ready ? 'Not ready' : 'I\'m ready'}
+            {self?.is_ready ? 'Not ready' : "I'm ready"}
           </Text>
         </Pressable>
 
