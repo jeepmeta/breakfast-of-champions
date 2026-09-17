@@ -56,7 +56,7 @@ export interface Room {
 }
 
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
-  max_participants: 12,
+  max_participants: 400,
   allow_anonymous: true,
   veto_enabled: true,
   veto_limit_per_user: 1,
