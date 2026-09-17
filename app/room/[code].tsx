@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Pressable,
   FlatList,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -15,12 +16,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoom } from '../../src/room/RoomContext';
 import type { Participant } from '../../src/types/room';
 import { isSwipeMatchState } from '../../src/types/swipe';
+import { isGroupWheelState } from '../../src/types/group-wheel';
 import type { CatalogItem } from '../../src/data/sample-items';
 import { SwipeDeck } from '../../src/components/swipe/SwipeDeck';
+import {
+  WafflrWheel,
+  type WheelSegment,
+} from '../../src/components/wheel/WafflrWheel';
+import { ConfettiBurst } from '../../src/components/celebration/ConfettiBurst';
 import { colors } from '../../src/theme/colors';
 import { spacing, radius } from '../../src/theme/tokens';
 
-export default function RoomLobbyScreen() {
+export default function RoomScreen() {
   const { code: routeCode } = useLocalSearchParams<{ code: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -37,6 +44,10 @@ export default function RoomLobbyScreen() {
     addGuest,
     leave,
     startGame,
+    startGroupWheel,
+    hostSpinWheel,
+    completeWheelSpin,
+    nextWheelSpin,
     castVote,
     dismissMatch,
     isHost,
@@ -44,15 +55,16 @@ export default function RoomLobbyScreen() {
     isLoading,
   } = useRoom();
 
+  const completingRef = useRef(false);
+
   useEffect(() => {
-    if (routeCode) {
-      void refresh(String(routeCode));
-    }
+    if (routeCode) void refresh(String(routeCode));
   }, [routeCode, refresh]);
 
   const self = room?.participants.find((p) => p.id === selfId);
   const code = room?.code ?? String(routeCode ?? '').toUpperCase();
   const swipeState = room && isSwipeMatchState(room.state) ? room.state : null;
+  const wheelState = room && isGroupWheelState(room.state) ? room.state : null;
 
   const votedIds = useMemo(() => {
     if (!swipeState || !selfId) return new Set<string>();
@@ -82,6 +94,44 @@ export default function RoomLobbyScreen() {
         | undefined)
     : undefined;
 
+  const wheelSegments: WheelSegment[] = useMemo(() => {
+    if (!room) return [];
+    return room.participants.map((p) => ({
+      id: p.id,
+      label: p.display_name,
+      emoji: p.display_name.slice(0, 1).toUpperCase(),
+      weight: 1,
+    }));
+  }, [room]);
+
+  const externalSpin = useMemo(() => {
+    if (!wheelState?.spin || wheelState.phase !== 'spinning') return null;
+    return {
+      nonce: wheelState.spin.nonce,
+      velocity: wheelState.spin.velocity,
+      startRotation: wheelState.spin.start_rotation,
+    };
+  }, [wheelState]);
+
+  const winnerParticipant = useMemo(() => {
+    if (!wheelState?.current_winner_id || !room) return null;
+    return (
+      room.participants.find((p) => p.id === wheelState.current_winner_id) ??
+      null
+    );
+  }, [wheelState, room]);
+
+  const tallyList = useMemo(() => {
+    if (!wheelState || !room) return [];
+    return room.participants
+      .map((p) => ({
+        id: p.id,
+        name: p.display_name,
+        wins: wheelState.tallies[p.id] ?? 0,
+      }))
+      .sort((a, b) => b.wins - a.wins);
+  }, [wheelState, room]);
+
   const onToggleReady = async () => {
     if (!self) return;
     try {
@@ -106,7 +156,7 @@ export default function RoomLobbyScreen() {
     await addGuest();
   };
 
-  const onStart = async () => {
+  const onStartSwipe = async () => {
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
@@ -115,12 +165,33 @@ export default function RoomLobbyScreen() {
     await startGame();
   };
 
+  const onStartWheel = async () => {
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      // ignore
+    }
+    await startGroupWheel();
+  };
+
+  const onWheelSpinEnd = async () => {
+    if (!isHost) return;
+    if (completingRef.current) return;
+    completingRef.current = true;
+    try {
+      await completeWheelSpin();
+    } finally {
+      completingRef.current = false;
+    }
+  };
+
   const readyCount =
     room?.participants.filter((p) => p.is_ready).length ?? 0;
   const total = room?.participants.length ?? 0;
 
   const renderParticipant = ({ item }: { item: Participant }) => {
-    const isSelf = item.id === selfId;
+    const isSelfRow = item.id === selfId;
+    const wins = wheelState?.tallies[item.id];
     return (
       <View style={[styles.participantRow, { backgroundColor: cardBg }]}>
         <View style={styles.participantLeft}>
@@ -141,10 +212,13 @@ export default function RoomLobbyScreen() {
           <View>
             <Text style={[styles.name, { color: text }]}>
               {item.display_name}
-              {isSelf ? ' (you)' : ''}
+              {isSelfRow ? ' (you)' : ''}
             </Text>
             <Text style={[styles.meta, { color: muted }]}>
               {item.is_host ? 'Host' : 'Guest'}
+              {typeof wins === 'number'
+                ? ` · ${wins} win${wins === 1 ? '' : 's'}`
+                : ''}
             </Text>
           </View>
         </View>
@@ -202,6 +276,135 @@ export default function RoomLobbyScreen() {
     );
   }
 
+  if (room.mode === 'group_wheel' && wheelState) {
+    const celebrating =
+      wheelState.phase === 'celebration' || room.status === 'revealing';
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+        <ConfettiBurst active={celebrating && !!winnerParticipant} />
+        <ScrollView
+          contentContainerStyle={styles.wheelScroll}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={[styles.label, { color: muted }]}>{code}</Text>
+          <Text style={[styles.swipeTitle, { color: text }]}>Group Wheel</Text>
+          <Text
+            style={[styles.hint, { color: muted, marginBottom: spacing[4] }]}
+          >
+            Everyone on the wheel · host spins
+          </Text>
+
+          <WafflrWheel
+            segments={wheelSegments}
+            size={280}
+            hideSpinButton
+            hideResult
+            externalSpin={externalSpin}
+            onSpinEnd={() => {
+              void onWheelSpinEnd();
+            }}
+          />
+
+          {celebrating && winnerParticipant ? (
+            <View style={styles.wheelWinBox}>
+              <Text style={styles.celebrateEmoji}>
+                {winnerParticipant.display_name.slice(0, 1).toUpperCase()}
+              </Text>
+              <Text
+                style={[
+                  styles.celebrateTitle,
+                  { color: colors.brand.emerald[500] },
+                ]}
+              >
+                {winnerParticipant.display_name}
+              </Text>
+              <Text style={[styles.hint, { color: muted }]}>
+                wins this round!
+              </Text>
+            </View>
+          ) : null}
+
+          {wheelState.phase === 'spinning' ? (
+            <Text style={[styles.startHint, { color: muted }]}>Spinning…</Text>
+          ) : null}
+
+          <View style={styles.tallyBox}>
+            <Text style={[styles.sectionLabel, { color: muted }]}>
+              Scoreboard
+            </Text>
+            {tallyList.map((row) => (
+              <View key={row.id} style={styles.tallyRow}>
+                <Text style={[styles.tallyName, { color: text }]}>
+                  {row.name}
+                </Text>
+                <Text
+                  style={[
+                    styles.tallyWins,
+                    { color: colors.brand.amber[500] },
+                  ]}
+                >
+                  {row.wins}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.footer}>
+            {isHost && wheelState.phase === 'ready' ? (
+              <Pressable
+                onPress={() => void hostSpinWheel()}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  {
+                    backgroundColor: colors.brand.amber[500],
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.primaryBtnText,
+                    { color: colors.brand.slate[900] },
+                  ]}
+                >
+                  Spin the wheel
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {isHost && celebrating ? (
+              <Pressable
+                onPress={() => void nextWheelSpin()}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  {
+                    backgroundColor: colors.brand.emerald[500],
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.primaryBtnText, { color: '#fff' }]}>
+                  Spin again
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {!isHost && wheelState.phase === 'ready' ? (
+              <Text style={[styles.startHint, { color: muted }]}>
+                Waiting for host to spin…
+              </Text>
+            ) : null}
+
+            <Pressable onPress={onLeave} style={styles.back}>
+              <Text style={{ color: muted, fontSize: 16 }}>Leave room</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (
     swipeState &&
     (swipeState.phase === 'celebration' || room.status === 'revealing') &&
@@ -211,7 +414,12 @@ export default function RoomLobbyScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
         <View style={styles.celebrate}>
           <Text style={styles.celebrateEmoji}>{matchedItem.emoji}</Text>
-          <Text style={[styles.celebrateTitle, { color: colors.brand.emerald[500] }]}>
+          <Text
+            style={[
+              styles.celebrateTitle,
+              { color: colors.brand.emerald[500] },
+            ]}
+          >
             It is a match!
           </Text>
           <Text style={[styles.celebrateItem, { color: text }]}>
@@ -222,9 +430,17 @@ export default function RoomLobbyScreen() {
           </Text>
           <Pressable
             onPress={dismissMatch}
-            style={[styles.primaryBtn, { backgroundColor: colors.brand.amber[500] }]}
+            style={[
+              styles.primaryBtn,
+              { backgroundColor: colors.brand.amber[500] },
+            ]}
           >
-            <Text style={[styles.primaryBtnText, { color: colors.brand.slate[900] }]}>
+            <Text
+              style={[
+                styles.primaryBtnText,
+                { color: colors.brand.slate[900] },
+              ]}
+            >
               Keep swiping
             </Text>
           </Pressable>
@@ -245,7 +461,9 @@ export default function RoomLobbyScreen() {
       return (
         <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
           <View style={styles.body}>
-            <Text style={[styles.title, { color: text }]}>Waiting on others…</Text>
+            <Text style={[styles.title, { color: text }]}>
+              Waiting on others…
+            </Text>
             <Text style={[styles.hint, { color: muted }]}>
               You finished the deck. Hang tight for a match.
             </Text>
@@ -261,7 +479,9 @@ export default function RoomLobbyScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
         <View style={styles.swipeHeader}>
           <Text style={[styles.label, { color: muted }]}>{code}</Text>
-          <Text style={[styles.swipeTitle, { color: text }]}>What are we getting?</Text>
+          <Text style={[styles.swipeTitle, { color: text }]}>
+            What are we getting?
+          </Text>
         </View>
         <SwipeDeck
           key={nextItem.id}
@@ -364,24 +584,47 @@ export default function RoomLobbyScreen() {
         </Pressable>
 
         {isHost && everyoneReady ? (
-          <Pressable
-            onPress={onStart}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              {
-                backgroundColor: colors.brand.emerald[500],
-                opacity: pressed ? 0.9 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.primaryBtnText, { color: '#fff' }]}>
-              Start · Swipe Match
-            </Text>
-          </Pressable>
+          <>
+            <Pressable
+              onPress={onStartWheel}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                {
+                  backgroundColor: colors.brand.amber[500],
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.primaryBtnText,
+                  { color: colors.brand.slate[900] },
+                ]}
+              >
+                Start · Group Wheel
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onStartSwipe}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                {
+                  backgroundColor: colors.brand.emerald[500],
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.primaryBtnText, { color: '#fff' }]}>
+                Start · Swipe Match
+              </Text>
+            </Pressable>
+          </>
         ) : null}
 
         {!isHost && everyoneReady ? (
-          <Text style={[styles.startHint, { color: colors.brand.emerald[500] }]}>
+          <Text
+            style={[styles.startHint, { color: colors.brand.emerald[500] }]}
+          >
             Waiting for host to start…
           </Text>
         ) : null}
@@ -552,5 +795,34 @@ const styles = StyleSheet.create({
   back: {
     paddingVertical: spacing[2],
     alignItems: 'center',
+  },
+  wheelScroll: {
+    alignItems: 'center',
+    paddingTop: spacing[6],
+    paddingBottom: spacing[10],
+  },
+  wheelWinBox: {
+    marginTop: spacing[4],
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  tallyBox: {
+    width: '100%',
+    marginTop: spacing[6],
+    gap: spacing[2],
+  },
+  tallyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+  },
+  tallyName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  tallyWins: {
+    fontSize: 18,
+    fontWeight: '800',
   },
 });
