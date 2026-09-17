@@ -4,6 +4,7 @@
 
 export type RoomMode =
   | 'solo_wheel'
+  | 'group_wheel'
   | 'swipe_match'
   | 'bracket'
   | 'series'
