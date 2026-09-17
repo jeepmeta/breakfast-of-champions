@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -26,11 +27,11 @@ export default function HomeScreen() {
   const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
   const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
 
-  const { create, join } = useRoom();
+  const { create, join, isLoading } = useRoom();
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState<string | null>(null);
-  const [joining, setJoining] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const haptic = async (style: Haptics.ImpactFeedbackStyle) => {
     try {
@@ -41,9 +42,17 @@ export default function HomeScreen() {
   };
 
   const onCreateRoom = async () => {
+    if (busy || isLoading) return;
+    setBusy(true);
     await haptic(Haptics.ImpactFeedbackStyle.Medium);
-    const { code } = create({ displayName: 'You' });
-    router.push(`/room/${code}`);
+    try {
+      const { code } = await create({ displayName: 'You' });
+      router.push(`/room/${code}`);
+    } catch {
+      setJoinError('Could not create room. Check your connection.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onOpenJoin = async () => {
@@ -54,10 +63,11 @@ export default function HomeScreen() {
   };
 
   const onSubmitJoin = async () => {
-    setJoining(true);
+    if (busy || joinCode.length < 6) return;
+    setBusy(true);
     setJoinError(null);
-    const result = join(joinCode, 'You');
-    setJoining(false);
+    const result = await join(joinCode, 'You');
+    setBusy(false);
     if (!result.ok) {
       setJoinError(result.error);
       return;
@@ -84,12 +94,17 @@ export default function HomeScreen() {
       <View style={styles.actions}>
         <Pressable
           onPress={onCreateRoom}
+          disabled={busy}
           style={({ pressed }) => [
             styles.primaryBtn,
-            { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+            { opacity: busy ? 0.6 : pressed ? 0.9 : 1 },
           ]}
         >
-          <Text style={styles.primaryBtnText}>Create Room</Text>
+          {busy && !joinOpen ? (
+            <ActivityIndicator color={colors.brand.slate[900]} />
+          ) : (
+            <Text style={styles.primaryBtnText}>Create Room</Text>
+          )}
         </Pressable>
 
         <Pressable
@@ -160,18 +175,20 @@ export default function HomeScreen() {
             ) : null}
             <Pressable
               onPress={onSubmitJoin}
-              disabled={joining || joinCode.length < 6}
+              disabled={busy || joinCode.length < 6}
               style={({ pressed }) => [
                 styles.primaryBtn,
                 {
-                  opacity: joining || joinCode.length < 6 ? 0.5 : pressed ? 0.9 : 1,
+                  opacity: busy || joinCode.length < 6 ? 0.5 : pressed ? 0.9 : 1,
                   marginTop: spacing[4],
                 },
               ]}
             >
-              <Text style={styles.primaryBtnText}>
-                {joining ? 'Joining…' : 'Join'}
-              </Text>
+              {busy ? (
+                <ActivityIndicator color={colors.brand.slate[900]} />
+              ) : (
+                <Text style={styles.primaryBtnText}>Join</Text>
+              )}
             </Pressable>
             <Pressable onPress={() => setJoinOpen(false)} style={styles.ghostBtn}>
               <Text style={{ color: muted }}>Cancel</Text>
@@ -212,6 +229,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[4],
     borderRadius: radius.xl,
     alignItems: 'center',
+    minHeight: 56,
+    justifyContent: 'center',
   },
   primaryBtnText: {
     color: colors.brand.slate[900],
