@@ -337,15 +337,61 @@ export default function RoomScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
         <ConfettiBurst active={celebrating && !!winnerDisplay} />
+
+        {celebrating && winnerDisplay ? (
+          <View style={styles.winnerOverlay} pointerEvents="box-none">
+            <View
+              style={[
+                styles.winnerCard,
+                {
+                  backgroundColor: isDark
+                    ? colors.brand.slate[800]
+                    : '#fff',
+                  borderColor: colors.brand.emerald[500],
+                },
+              ]}
+            >
+              <Text style={styles.winnerCardEmoji}>{winnerDisplay.emoji}</Text>
+              <Text
+                style={[
+                  styles.winnerCardName,
+                  { color: colors.brand.emerald[500] },
+                ]}
+              >
+                {winnerDisplay.name}
+              </Text>
+              <Text style={[styles.winnerCardSub, { color: muted }]}>
+                wins this round
+              </Text>
+              {isHost ? (
+                <Pressable
+                  onPress={() => void nextWheelSpin()}
+                  style={({ pressed }) => [
+                    styles.winnerCardBtn,
+                    {
+                      backgroundColor: colors.brand.emerald[500],
+                      opacity: pressed ? 0.9 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={styles.winnerCardBtnText}>Spin again</Text>
+                </Pressable>
+              ) : (
+                <Text style={[styles.startHint, { color: muted, marginTop: spacing[3] }]}>
+                  Waiting for host…
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : null}
+
         <ScrollView
           contentContainerStyle={styles.wheelScroll}
           showsVerticalScrollIndicator={false}
         >
           <Text style={[styles.label, { color: muted }]}>{code}</Text>
           <Text style={[styles.swipeTitle, { color: text }]}>Group Wheel</Text>
-          <Text
-            style={[styles.hint, { color: muted, marginBottom: spacing[4] }]}
-          >
+          <Text style={[styles.hint, { color: muted, marginBottom: spacing[3] }]}>
             Spin the catalog · host spins
           </Text>
 
@@ -360,49 +406,7 @@ export default function RoomScreen() {
             }}
           />
 
-          {celebrating && winnerDisplay ? (
-            <View style={styles.wheelWinBox}>
-              <Text style={styles.celebrateEmoji}>{winnerDisplay.emoji}</Text>
-              <Text
-                style={[
-                  styles.celebrateTitle,
-                  { color: colors.brand.emerald[500] },
-                ]}
-              >
-                {winnerDisplay.name}
-              </Text>
-              <Text style={[styles.hint, { color: muted }]}>
-                wins this round!
-              </Text>
-            </View>
-          ) : null}
-
-          {wheelState.phase === 'spinning' ? (
-            <Text style={[styles.startHint, { color: muted }]}>Spinning…</Text>
-          ) : null}
-
-          <View style={styles.tallyBox}>
-            <Text style={[styles.sectionLabel, { color: muted }]}>
-              Scoreboard
-            </Text>
-            {tallyList.map((row) => (
-              <View key={row.id} style={styles.tallyRow}>
-                <Text style={[styles.tallyName, { color: text }]}>
-                  {row.name}
-                </Text>
-                <Text
-                  style={[
-                    styles.tallyWins,
-                    { color: colors.brand.amber[500] },
-                  ]}
-                >
-                  {row.wins}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.footer}>
+          <View style={styles.wheelControls}>
             {isHost && wheelState.phase === 'ready' ? (
               <Pressable
                 onPress={() => void hostSpinWheel()}
@@ -411,6 +415,7 @@ export default function RoomScreen() {
                   {
                     backgroundColor: colors.brand.amber[500],
                     opacity: pressed ? 0.9 : 1,
+                    width: '100%',
                   },
                 ]}
               >
@@ -425,21 +430,8 @@ export default function RoomScreen() {
               </Pressable>
             ) : null}
 
-            {isHost && celebrating ? (
-              <Pressable
-                onPress={() => void nextWheelSpin()}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  {
-                    backgroundColor: colors.brand.emerald[500],
-                    opacity: pressed ? 0.9 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.primaryBtnText, { color: '#fff' }]}>
-                  Spin again
-                </Text>
-              </Pressable>
+            {wheelState.phase === 'spinning' ? (
+              <Text style={[styles.startHint, { color: muted }]}>Spinning…</Text>
             ) : null}
 
             {!isHost && wheelState.phase === 'ready' ? (
@@ -447,11 +439,47 @@ export default function RoomScreen() {
                 Waiting for host to spin…
               </Text>
             ) : null}
-
-            <Pressable onPress={onLeave} style={styles.back}>
-              <Text style={{ color: muted, fontSize: 16 }}>Leave room</Text>
-            </Pressable>
           </View>
+
+          <View style={styles.tallyBox}>
+            <Text style={[styles.tallySectionLabel, { color: muted }]}>
+              Scoreboard
+            </Text>
+            <View style={styles.tallyChips}>
+              {tallyList.map((row) => (
+                <View
+                  key={row.id}
+                  style={[
+                    styles.tallyChip,
+                    {
+                      backgroundColor: isDark
+                        ? colors.brand.slate[800]
+                        : colors.brand.slate[100],
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.tallyChipName, { color: text }]}
+                    numberOfLines={1}
+                  >
+                    {row.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.tallyChipWins,
+                      { color: colors.brand.amber[500] },
+                    ]}
+                  >
+                    {row.wins}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <Pressable onPress={onLeave} style={[styles.back, { marginTop: spacing[4] }]}>
+            <Text style={{ color: muted, fontSize: 15 }}>Leave room</Text>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     );
@@ -822,33 +850,95 @@ const styles = StyleSheet.create({
   wheelScroll: {
     padding: spacing[6],
     alignItems: 'center',
-    paddingBottom: spacing[12],
+    paddingBottom: spacing[10],
   },
-  wheelWinBox: {
-    alignItems: 'center',
+  wheelControls: {
+    width: '100%',
     marginTop: spacing[4],
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  winnerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: spacing[6],
+  },
+  winnerCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: radius['2xl'],
+    borderWidth: 2,
+    paddingVertical: spacing[8],
+    paddingHorizontal: spacing[6],
+    alignItems: 'center',
     gap: spacing[1],
   },
+  winnerCardEmoji: {
+    fontSize: 56,
+    marginBottom: spacing[2],
+  },
+  winnerCardName: {
+    fontSize: 26,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  winnerCardSub: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: spacing[2],
+  },
+  winnerCardBtn: {
+    marginTop: spacing[4],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[8],
+    borderRadius: radius.full,
+  },
+  winnerCardBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
   startHint: {
-    marginTop: spacing[3],
+    marginTop: spacing[1],
     fontSize: 14,
   },
   tallyBox: {
     width: '100%',
-    marginTop: spacing[6],
-    gap: spacing[2],
+    marginTop: spacing[5],
   },
-  tallyRow: {
+  tallySectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: spacing[2],
+    textAlign: 'center',
+  },
+  tallyChips: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing[2],
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing[1],
   },
-  tallyName: {
-    fontSize: 16,
+  tallyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingVertical: 4,
+    paddingHorizontal: spacing[2],
+    borderRadius: radius.full,
+    maxWidth: '48%',
+  },
+  tallyChipName: {
+    fontSize: 12,
     fontWeight: '600',
+    flexShrink: 1,
   },
-  tallyWins: {
-    fontSize: 18,
+  tallyChipWins: {
+    fontSize: 13,
     fontWeight: '800',
   },
 });
