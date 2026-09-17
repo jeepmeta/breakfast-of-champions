@@ -1,10 +1,23 @@
-import { View, Text, Pressable, StyleSheet, useColorScheme } from 'react-native';
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  useColorScheme,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useRoom } from '../src/room/RoomContext';
 import { colors } from '../src/theme/colors';
 import { spacing, radius } from '../src/theme/tokens';
+import { normalizeRoomCode } from '../src/utils/room-code';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -13,31 +26,49 @@ export default function HomeScreen() {
   const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
   const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
 
-  const onCreateRoom = async () => {
+  const { create, join } = useRoom();
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
+
+  const haptic = async (style: Haptics.ImpactFeedbackStyle) => {
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await Haptics.impactAsync(style);
     } catch {
-      // haptics unavailable on web / simulator without support
+      // ignore
     }
-    router.push('/room/WAFFLR');
   };
 
-  const onJoinRoom = async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // no-op
+  const onCreateRoom = async () => {
+    await haptic(Haptics.ImpactFeedbackStyle.Medium);
+    const { code } = create({ displayName: 'You' });
+    router.push(`/room/${code}`);
+  };
+
+  const onOpenJoin = async () => {
+    await haptic(Haptics.ImpactFeedbackStyle.Light);
+    setJoinCode('');
+    setJoinError(null);
+    setJoinOpen(true);
+  };
+
+  const onSubmitJoin = async () => {
+    setJoining(true);
+    setJoinError(null);
+    const result = join(joinCode, 'You');
+    setJoining(false);
+    if (!result.ok) {
+      setJoinError(result.error);
+      return;
     }
-    // Placeholder: same demo room for now
-    router.push('/room/JOINME');
+    await haptic(Haptics.ImpactFeedbackStyle.Medium);
+    setJoinOpen(false);
+    router.push(`/room/${result.code}`);
   };
 
   const onSoloWheel = async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // no-op
-    }
+    await haptic(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/solo/wheel');
   };
 
@@ -62,7 +93,7 @@ export default function HomeScreen() {
         </Pressable>
 
         <Pressable
-          onPress={onJoinRoom}
+          onPress={onOpenJoin}
           style={({ pressed }) => [
             styles.secondaryBtn,
             {
@@ -84,6 +115,70 @@ export default function HomeScreen() {
       <Text style={[styles.footer, { color: muted }]}>
         Fairness through randomness + consensus
       </Text>
+
+      <Modal
+        visible={joinOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setJoinOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: isDark ? colors.brand.slate[800] : colors.brand.slate[50] },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: text }]}>Join room</Text>
+            <Text style={[styles.modalHint, { color: muted }]}>
+              Enter the 6-character code from your host
+            </Text>
+            <TextInput
+              value={joinCode}
+              onChangeText={(t) => setJoinCode(normalizeRoomCode(t))}
+              placeholder="WAFFLR"
+              placeholderTextColor={muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={6}
+              style={[
+                styles.codeInput,
+                {
+                  color: text,
+                  borderColor: isDark ? colors.border.dark : colors.border.light,
+                  backgroundColor: isDark ? colors.brand.slate[900] : '#fff',
+                },
+              ]}
+              onSubmitEditing={onSubmitJoin}
+              returnKeyType="go"
+            />
+            {joinError ? (
+              <Text style={styles.errorText}>{joinError}</Text>
+            ) : null}
+            <Pressable
+              onPress={onSubmitJoin}
+              disabled={joining || joinCode.length < 6}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                {
+                  opacity: joining || joinCode.length < 6 ? 0.5 : pressed ? 0.9 : 1,
+                  marginTop: spacing[4],
+                },
+              ]}
+            >
+              <Text style={styles.primaryBtnText}>
+                {joining ? 'Joining…' : 'Join'}
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => setJoinOpen(false)} style={styles.ghostBtn}>
+              <Text style={{ color: muted }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -144,5 +239,41 @@ const styles = StyleSheet.create({
   footer: {
     textAlign: 'center',
     fontSize: 13,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalCard: {
+    borderTopLeftRadius: radius['2xl'],
+    borderTopRightRadius: radius['2xl'],
+    padding: spacing[6],
+    paddingBottom: spacing[10],
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  modalHint: {
+    marginTop: spacing[1],
+    fontSize: 15,
+  },
+  codeInput: {
+    marginTop: spacing[4],
+    borderWidth: 1.5,
+    borderRadius: radius.lg,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[4],
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 6,
+    textAlign: 'center',
+  },
+  errorText: {
+    marginTop: spacing[2],
+    color: colors.brand.pink[500],
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

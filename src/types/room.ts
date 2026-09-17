@@ -1,6 +1,5 @@
 /**
  * Canonical room types — mirror of room-state-schemas.md.
- * Keep in sync with the project reference file.
  */
 
 export type RoomMode =
@@ -15,6 +14,8 @@ export type RoomMode =
 
 export type RoomStatus = 'lobby' | 'active' | 'revealing' | 'completed' | 'expired';
 
+export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
+
 export interface RoomSettings {
   max_participants: number;
   allow_anonymous: boolean;
@@ -27,11 +28,15 @@ export interface RoomSettings {
 
 export interface Participant {
   id: string;
+  user_id: string | null;
   display_name: string;
   avatar_url: string | null;
   is_host: boolean;
   is_ready: boolean;
   joined_at: string;
+  last_seen_at: string;
+  connection_status: ConnectionStatus;
+  vetoes_remaining: number;
 }
 
 export interface Room {
@@ -46,5 +51,15 @@ export interface Room {
   settings: RoomSettings;
   item_payload: unknown[];
   participants: Participant[];
-  state: Record<string, unknown>; // ModeSpecificState — expand per mode
+  state: Record<string, unknown>;
 }
+
+export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
+  max_participants: 12,
+  allow_anonymous: true,
+  veto_enabled: true,
+  veto_limit_per_user: 1,
+  require_all_ready: true,
+  timer_seconds: null,
+  is_public: false,
+};
