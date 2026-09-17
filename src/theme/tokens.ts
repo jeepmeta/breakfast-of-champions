@@ -1,6 +1,6 @@
 /**
- * Spacing, radius, and other non-color tokens.
- * Align with design-tokens.md.
+ * Spacing, radius, type, and motion tokens.
+ * Align with design-tokens.md + branding-kit.
  */
 
 export const spacing = {
@@ -23,5 +23,31 @@ export const radius = {
   lg: 14,
   xl: 18,
   '2xl': 24,
+  '3xl': 28,
   full: 9999,
+} as const;
+
+/** Brand type roles — product UI uses system/Inter; display wordmark uses bubble style */
+export const type = {
+  display: {
+    fontSize: 40,
+    fontWeight: '800' as const,
+    letterSpacing: -0.5,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800' as const,
+  },
+  body: {
+    fontSize: 16,
+    fontWeight: '500' as const,
+  },
+  caption: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  mono: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
 } as const;
