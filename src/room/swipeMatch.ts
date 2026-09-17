@@ -10,11 +10,15 @@ import {
   type SwipeMatchState,
   type VoteDirection,
 } from '../types/swipe';
-import { buildSwipeDeck, DINNER_ITEMS } from '../data/sample-items';
+import { buildSwipeDeck, DINNER_ITEMS, type CatalogItem } from '../data/catalogs';
 import { fetchRoomById } from './supabaseStore';
 
-export async function startSwipeMatch(roomId: string): Promise<Room | null> {
-  const deck = buildSwipeDeck(DINNER_ITEMS);
+export async function startSwipeMatch(
+  roomId: string,
+  items?: CatalogItem[],
+): Promise<Room | null> {
+  const source = items && items.length > 0 ? items : DINNER_ITEMS;
+  const deck = buildSwipeDeck(source);
   const state = emptySwipeState(deck);
   const item_payload = deck.map((d) => d.payload);
 
@@ -48,7 +52,6 @@ export async function castSwipeVote(params: {
     throw new Error('Room is not in swipe match');
   }
 
-  // Ignore votes on already-vetoed items
   if (room.state.vetoed_item_ids.includes(itemId)) {
     return room;
   }
@@ -89,7 +92,6 @@ export async function castSwipeVote(params: {
     }
   }
 
-  // Advance past current item once everyone has voted (or item was vetoed)
   advancePastFullyVoted(state, participantCount);
 
   let status = room.status;
@@ -110,10 +112,6 @@ export async function castSwipeVote(params: {
   return fetchRoomById(roomId);
 }
 
-/**
- * Secret veto — one-time kill of an item. No one learns who vetoed.
- * Decrements participant.vetoes_remaining and adds item to vetoed_item_ids.
- */
 export async function castSecretVeto(params: {
   roomId: string;
   participantId: string;
@@ -137,10 +135,9 @@ export async function castSecretVeto(params: {
   }
 
   if (room.state.vetoed_item_ids.includes(itemId)) {
-    return room; // already gone
+    return room;
   }
 
-  // Already matched? too late
   if (room.state.matches.some((m) => m.item_id === itemId)) {
     throw new Error('Item already matched');
   }
@@ -152,12 +149,10 @@ export async function castSecretVeto(params: {
     vetoed_item_ids: [...room.state.vetoed_item_ids, itemId],
   };
 
-  // Clear any partial votes on the vetoed item
   delete state.votes[itemId];
 
   advancePastFullyVoted(state, room.participants.length);
 
-  // Decrement veto on the participant row
   const { error: partError } = await supabase
     .from('participants')
     .update({
@@ -190,7 +185,6 @@ function advancePastFullyVoted(
   state: SwipeMatchState,
   participantCount: number,
 ) {
-  // Skip any items that are vetoed or fully voted
   while (state.current_item_index < state.items.length) {
     const current = state.items[state.current_item_index];
     if (!current) break;
@@ -229,7 +223,6 @@ export async function dismissCelebration(roomId: string): Promise<Room | null> {
         : 'swiping',
   };
 
-  // Skip any leading vetoed items after dismiss
   while (
     state.current_item_index < state.items.length &&
     state.vetoed_item_ids.includes(state.items[state.current_item_index].id)
