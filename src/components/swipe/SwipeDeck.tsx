@@ -28,15 +28,28 @@ const SWIPE_THRESHOLD = SCREEN_W * 0.28;
 type Props = {
   item: CatalogItem;
   onSwipe: (direction: 'left' | 'right') => void;
+  /** Secret veto — only shown when user still has vetoes. */
+  onVeto?: () => void;
   remaining: number;
+  vetoesRemaining?: number;
+  vetoEnabled?: boolean;
 };
 
-export function SwipeDeck({ item, onSwipe, remaining }: Props) {
+export function SwipeDeck({
+  item,
+  onSwipe,
+  onVeto,
+  remaining,
+  vetoesRemaining = 0,
+  vetoEnabled = false,
+}: Props) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
   const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
   const cardBg = isDark ? colors.brand.slate[800] : '#fff';
+
+  const canVeto = vetoEnabled && vetoesRemaining > 0 && !!onVeto;
 
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -58,6 +71,16 @@ export function SwipeDeck({ item, onSwipe, remaining }: Props) {
     },
     [onSwipe, tx, ty],
   );
+
+  const fireVeto = useCallback(() => {
+    if (!canVeto) return;
+    try {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } catch {
+      // ignore
+    }
+    onVeto?.();
+  }, [canVeto, onVeto]);
 
   const pan = Gesture.Pan()
     .onUpdate((e) => {
@@ -103,15 +126,27 @@ export function SwipeDeck({ item, onSwipe, remaining }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.remaining, { color: muted }]}>
-        {remaining} left
-      </Text>
+      <View style={styles.metaRow}>
+        <Text style={[styles.remaining, { color: muted }]}>
+          {remaining} left
+        </Text>
+        {vetoEnabled ? (
+          <Text style={[styles.vetoHint, { color: muted }]}>
+            {vetoesRemaining > 0
+              ? `${vetoesRemaining} secret veto${vetoesRemaining === 1 ? '' : 's'}`
+              : 'No vetoes left'}
+          </Text>
+        ) : null}
+      </View>
 
       <GestureDetector gesture={pan}>
         <Animated.View
           style={[
             styles.card,
-            { backgroundColor: cardBg, borderColor: isDark ? colors.border.dark : colors.border.light },
+            {
+              backgroundColor: cardBg,
+              borderColor: isDark ? colors.border.dark : colors.border.light,
+            },
             cardStyle,
           ]}
         >
@@ -134,10 +169,16 @@ export function SwipeDeck({ item, onSwipe, remaining }: Props) {
                   key={t}
                   style={[
                     styles.tag,
-                    { backgroundColor: isDark ? colors.brand.slate[700] : colors.brand.slate[100] },
+                    {
+                      backgroundColor: isDark
+                        ? colors.brand.slate[700]
+                        : colors.brand.slate[100],
+                    },
                   ]}
                 >
-                  <Text style={{ color: muted, fontSize: 12, fontWeight: '600' }}>{t}</Text>
+                  <Text style={{ color: muted, fontSize: 12, fontWeight: '600' }}>
+                    {t}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -152,6 +193,17 @@ export function SwipeDeck({ item, onSwipe, remaining }: Props) {
         >
           <Text style={{ fontSize: 22 }}>✕</Text>
         </Pressable>
+
+        {canVeto ? (
+          <Pressable
+            onPress={fireVeto}
+            style={[styles.vetoBtn, { borderColor: colors.brand.amber[500] }]}
+          >
+            <Text style={styles.vetoBtnLabel}>VETO</Text>
+            <Text style={[styles.vetoBtnSub, { color: muted }]}>secret</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           onPress={() => finish('right')}
           style={[styles.circleBtn, { borderColor: colors.brand.emerald[500] }]}
@@ -170,10 +222,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing[4],
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[4],
+    marginBottom: spacing[3],
+  },
   remaining: {
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: spacing[3],
+  },
+  vetoHint: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   card: {
     width: Math.min(SCREEN_W - 48, 340),
@@ -236,7 +297,8 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing[8],
+    alignItems: 'center',
+    gap: spacing[5],
     marginTop: spacing[6],
   },
   circleBtn: {
@@ -246,5 +308,25 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  vetoBtn: {
+    minWidth: 72,
+    height: 64,
+    borderRadius: 16,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[3],
+  },
+  vetoBtnLabel: {
+    color: colors.brand.amber[500],
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 1,
+  },
+  vetoBtnSub: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });
