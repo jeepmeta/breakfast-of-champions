@@ -10,6 +10,7 @@ import React, {
 
 import type { Room, RoomMode } from '../types/room';
 import type { VoteDirection } from '../types/swipe';
+import type { CatalogItem } from '../data/catalogs';
 import * as api from './supabaseStore';
 import * as swipe from './swipeMatch';
 import * as groupWheel from './groupWheel';
@@ -31,8 +32,8 @@ type RoomContextValue = {
   setReady: (isReady: boolean) => Promise<void>;
   addGuest: () => Promise<void>;
   leave: () => Promise<void>;
-  startGame: () => Promise<void>;
-  startGroupWheel: () => Promise<void>;
+  startGame: (items?: CatalogItem[]) => Promise<void>;
+  startGroupWheel: (items?: CatalogItem[]) => Promise<void>;
   hostSpinWheel: () => Promise<void>;
   completeWheelSpin: () => Promise<void>;
   nextWheelSpin: () => Promise<void>;
@@ -178,10 +179,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     setSelfId(null);
   }, [room, selfId]);
 
-  const startGame = useCallback(async () => {
+  const startGame = useCallback(async (items?: CatalogItem[]) => {
     if (!room) return;
     try {
-      const updated = await swipe.startSwipeMatch(room.id);
+      const updated = await swipe.startSwipeMatch(room.id, items);
       if (updated) setRoom(updated);
     } catch (e) {
       console.warn('[room] startGame failed', e);
@@ -189,10 +190,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     }
   }, [room]);
 
-  const startGroupWheel = useCallback(async () => {
+  const startGroupWheel = useCallback(async (items?: CatalogItem[]) => {
     if (!room) return;
     try {
-      const updated = await groupWheel.startGroupWheel(room.id);
+      const updated = await groupWheel.startGroupWheel(room.id, items);
       if (updated) setRoom(updated);
     } catch (e) {
       console.warn('[room] startGroupWheel failed', e);
