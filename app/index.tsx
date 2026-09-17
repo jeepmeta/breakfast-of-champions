@@ -19,6 +19,7 @@ import { useRoom } from '../src/room/RoomContext';
 import { colors } from '../src/theme/colors';
 import { spacing, radius } from '../src/theme/tokens';
 import { normalizeRoomCode } from '../src/utils/room-code';
+import { WafflrLockup } from '../src/components/brand';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -85,10 +86,13 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
       <View style={styles.hero}>
-        <Text style={[styles.logo, { color: colors.brand.amber[500] }]}>Wafflr</Text>
-        <Text style={[styles.tagline, { color: muted }]}>
-          Decide in under 60 seconds
-        </Text>
+        <WafflrLockup
+          markSize={96}
+          wordmarkSize={42}
+          showTagline
+          tagline="Decide in under 60 seconds"
+          mutedColor={muted}
+        />
       </View>
 
       <View style={styles.actions}>
