@@ -37,6 +37,7 @@ type RoomContextValue = {
   completeWheelSpin: () => Promise<void>;
   nextWheelSpin: () => Promise<void>;
   castVote: (itemId: string, direction: VoteDirection) => Promise<void>;
+  castVeto: (itemId: string) => Promise<void>;
   dismissMatch: () => Promise<void>;
   isHost: boolean;
   everyoneReady: boolean;
@@ -248,6 +249,24 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     [room, selfId],
   );
 
+  const castVeto = useCallback(
+    async (itemId: string) => {
+      if (!room || !selfId) return;
+      try {
+        const updated = await swipe.castSecretVeto({
+          roomId: room.id,
+          participantId: selfId,
+          itemId,
+        });
+        if (updated) setRoom(updated);
+      } catch (e) {
+        console.warn('[room] castVeto failed', e);
+        setError(e instanceof Error ? e.message : 'Veto failed');
+      }
+    },
+    [room, selfId],
+  );
+
   const dismissMatch = useCallback(async () => {
     if (!room) return;
     try {
@@ -286,6 +305,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       completeWheelSpin,
       nextWheelSpin,
       castVote,
+      castVeto,
       dismissMatch,
       isHost,
       everyoneReady,
@@ -307,6 +327,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       completeWheelSpin,
       nextWheelSpin,
       castVote,
+      castVeto,
       dismissMatch,
       isHost,
       everyoneReady,
