@@ -2,25 +2,32 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
 import type { Room, RoomMode } from '../types/room';
-import * as store from './store';
+import * as api from './supabaseStore';
 
 type RoomContextValue = {
   room: Room | null;
   selfId: string | null;
-  create: (opts?: { displayName?: string; mode?: RoomMode }) => { code: string };
+  isLoading: boolean;
+  error: string | null;
+  create: (opts?: {
+    displayName?: string;
+    mode?: RoomMode;
+  }) => Promise<{ code: string }>;
   join: (
     code: string,
     displayName?: string,
-  ) => { ok: true; code: string } | { ok: false; error: string };
-  refresh: (code: string) => void;
-  setReady: (isReady: boolean) => void;
-  addGuest: () => void;
-  leave: () => void;
+  ) => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
+  refresh: (code: string) => Promise<void>;
+  setReady: (isReady: boolean) => Promise<void>;
+  addGuest: () => Promise<void>;
+  leave: () => Promise<void>;
   isHost: boolean;
   everyoneReady: boolean;
 };
@@ -30,56 +37,132 @@ const RoomContext = createContext<RoomContextValue | null>(null);
 export function RoomProvider({ children }: { children: React.ReactNode }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [selfId, setSelfId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const unsubRef = useRef<(() => void) | null>(null);
+
+  const attachRealtime = useCallback((roomId: string) => {
+    unsubRef.current?.();
+    unsubRef.current = api.subscribeToRoom(roomId, (next) => {
+      setRoom(next);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      unsubRef.current?.();
+    };
+  }, []);
 
   const create = useCallback(
-    (opts?: { displayName?: string; mode?: RoomMode }) => {
-      const { room: created, selfId: id } = store.createRoom(opts);
-      setRoom(created);
-      setSelfId(id);
-      return { code: created.code };
+    async (opts?: { displayName?: string; mode?: RoomMode }) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const { room: created, selfId: id } = await api.createRoom(opts);
+        setRoom(created);
+        setSelfId(id);
+        attachRealtime(created.id);
+        return { code: created.code };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to create room';
+        setError(message);
+        throw e;
+      } finally {
+        setIsLoading(false);
+      }
     },
-    [],
+    [attachRealtime],
   );
 
-  const join = useCallback((code: string, displayName?: string) => {
-    const result = store.joinRoom(code, displayName);
-    if (!result.ok) {
-      const messages: Record<string, string> = {
-        not_found: 'Room not found. Check the code and try again.',
-        full: 'This room is full.',
-        invalid_code: 'Enter a valid 6-character code.',
-      };
-      return { ok: false as const, error: messages[result.error] ?? 'Could not join.' };
-    }
-    setRoom(result.room);
-    setSelfId(result.selfId);
-    return { ok: true as const, code: result.room.code };
-  }, []);
+  const join = useCallback(
+    async (code: string, displayName?: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const result = await api.joinRoom(code, displayName);
+        if (!result.ok) {
+          const messages: Record<string, string> = {
+            not_found: 'Room not found. Check the code and try again.',
+            full: 'This room is full.',
+            invalid_code: 'Enter a valid 6-character code.',
+          };
+          return {
+            ok: false as const,
+            error: messages[result.error] ?? 'Could not join.',
+          };
+        }
+        setRoom(result.room);
+        setSelfId(result.selfId);
+        attachRealtime(result.room.id);
+        return { ok: true as const, code: result.room.code };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Could not join room';
+        setError(message);
+        return { ok: false as const, error: message };
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [attachRealtime],
+  );
 
-  const refresh = useCallback((code: string) => {
-    const latest = store.getRoom(code);
-    if (latest) setRoom(latest);
-  }, []);
+  const refresh = useCallback(
+    async (code: string) => {
+      try {
+        const latest = await api.fetchRoomByCode(code);
+        if (latest) {
+          setRoom(latest);
+          attachRealtime(latest.id);
+        }
+      } catch (e) {
+        console.warn('[room] refresh failed', e);
+      }
+    },
+    [attachRealtime],
+  );
 
   const setReady = useCallback(
-    (isReady: boolean) => {
-      if (!room || !selfId) return;
-      const updated = store.setParticipantReady(room.code, selfId, isReady);
-      if (updated) setRoom(updated);
+    async (isReady: boolean) => {
+      if (!selfId) return;
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          participants: prev.participants.map((p) =>
+            p.id === selfId ? { ...p, is_ready: isReady } : p,
+          ),
+        };
+      });
+      try {
+        await api.setParticipantReady(selfId, isReady);
+      } catch (e) {
+        console.warn('[room] setReady failed', e);
+      }
     },
-    [room, selfId],
+    [selfId],
   );
 
-  const addGuest = useCallback(() => {
+  const addGuest = useCallback(async () => {
     if (!room) return;
-    const updated = store.addSimulatedGuest(room.code);
-    if (updated) setRoom(updated);
+    try {
+      const updated = await api.addSimulatedGuest(room.id);
+      if (updated) setRoom(updated);
+    } catch (e) {
+      console.warn('[room] addGuest failed', e);
+    }
   }, [room]);
 
-  const leave = useCallback(() => {
+  const leave = useCallback(async () => {
     if (room && selfId) {
-      store.leaveRoom(room.code, selfId);
+      try {
+        await api.leaveRoom(room.id, selfId);
+      } catch (e) {
+        console.warn('[room] leave failed', e);
+      }
     }
+    unsubRef.current?.();
+    unsubRef.current = null;
     setRoom(null);
     setSelfId(null);
   }, [room, selfId]);
@@ -90,7 +173,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
   );
 
   const everyoneReady = useMemo(
-    () => (room ? store.allReady(room) : false),
+    () => (room ? api.allReady(room) : false),
     [room],
   );
 
@@ -98,6 +181,8 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     () => ({
       room,
       selfId,
+      isLoading,
+      error,
       create,
       join,
       refresh,
@@ -110,6 +195,8 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     [
       room,
       selfId,
+      isLoading,
+      error,
       create,
       join,
       refresh,
