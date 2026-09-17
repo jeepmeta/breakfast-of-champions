@@ -9,7 +9,10 @@ import React, {
 } from 'react';
 
 import type { Room, RoomMode } from '../types/room';
+import type { VoteDirection } from '../types/swipe';
 import * as api from './supabaseStore';
+import * as swipe from './swipeMatch';
+import * as groupWheel from './groupWheel';
 
 type RoomContextValue = {
   room: Room | null;
@@ -28,6 +31,13 @@ type RoomContextValue = {
   setReady: (isReady: boolean) => Promise<void>;
   addGuest: () => Promise<void>;
   leave: () => Promise<void>;
+  startGame: () => Promise<void>;
+  startGroupWheel: () => Promise<void>;
+  hostSpinWheel: () => Promise<void>;
+  completeWheelSpin: () => Promise<void>;
+  nextWheelSpin: () => Promise<void>;
+  castVote: (itemId: string, direction: VoteDirection) => Promise<void>;
+  dismissMatch: () => Promise<void>;
   isHost: boolean;
   everyoneReady: boolean;
 };
@@ -167,6 +177,87 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     setSelfId(null);
   }, [room, selfId]);
 
+  const startGame = useCallback(async () => {
+    if (!room) return;
+    try {
+      const updated = await swipe.startSwipeMatch(room.id);
+      if (updated) setRoom(updated);
+    } catch (e) {
+      console.warn('[room] startGame failed', e);
+      setError(e instanceof Error ? e.message : 'Could not start');
+    }
+  }, [room]);
+
+  const startGroupWheel = useCallback(async () => {
+    if (!room) return;
+    try {
+      const updated = await groupWheel.startGroupWheel(room.id);
+      if (updated) setRoom(updated);
+    } catch (e) {
+      console.warn('[room] startGroupWheel failed', e);
+      setError(e instanceof Error ? e.message : 'Could not start wheel');
+    }
+  }, [room]);
+
+  const hostSpinWheel = useCallback(async () => {
+    if (!room) return;
+    try {
+      const updated = await groupWheel.hostStartSpin(room.id);
+      if (updated) setRoom(updated);
+    } catch (e) {
+      console.warn('[room] hostSpinWheel failed', e);
+    }
+  }, [room]);
+
+  const completeWheelSpin = useCallback(async () => {
+    if (!room) return;
+    try {
+      const updated = await groupWheel.completeSpin(room.id);
+      if (updated) setRoom(updated);
+    } catch (e) {
+      console.warn('[room] completeWheelSpin failed', e);
+    }
+  }, [room]);
+
+  const nextWheelSpin = useCallback(async () => {
+    if (!room) return;
+    try {
+      const updated = await groupWheel.resetForNextSpin(room.id);
+      if (updated) setRoom(updated);
+    } catch (e) {
+      console.warn('[room] nextWheelSpin failed', e);
+    }
+  }, [room]);
+
+  const castVote = useCallback(
+    async (itemId: string, direction: VoteDirection) => {
+      if (!room || !selfId) return;
+      try {
+        const updated = await swipe.castSwipeVote({
+          roomId: room.id,
+          participantId: selfId,
+          itemId,
+          direction,
+          participantCount: room.participants.length,
+        });
+        if (updated) setRoom(updated);
+      } catch (e) {
+        console.warn('[room] castVote failed', e);
+      }
+    },
+    [room, selfId],
+  );
+
+  const dismissMatch = useCallback(async () => {
+    if (!room) return;
+    try {
+      const updated = await swipe.dismissCelebration(room.id);
+      if (updated) setRoom(updated);
+    } catch (e) {
+      console.warn('[room] dismissMatch failed', e);
+    }
+  }, [room]);
+
   const isHost = useMemo(
     () => Boolean(room && selfId && room.host_id === selfId),
     [room, selfId],
@@ -189,6 +280,13 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       setReady,
       addGuest,
       leave,
+      startGame,
+      startGroupWheel,
+      hostSpinWheel,
+      completeWheelSpin,
+      nextWheelSpin,
+      castVote,
+      dismissMatch,
       isHost,
       everyoneReady,
     }),
@@ -203,6 +301,13 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       setReady,
       addGuest,
       leave,
+      startGame,
+      startGroupWheel,
+      hostSpinWheel,
+      completeWheelSpin,
+      nextWheelSpin,
+      castVote,
+      dismissMatch,
       isHost,
       everyoneReady,
     ],

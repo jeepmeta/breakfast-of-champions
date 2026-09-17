@@ -1,53 +1,73 @@
-import { View, Text, StyleSheet, useColorScheme, Pressable } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  useColorScheme,
+  Pressable,
+  ScrollView,
+} from 'react-native';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  WafflrWheel,
+  type WheelSegment,
+} from '../../src/components/wheel/WafflrWheel';
+import { DINNER_ITEMS } from '../../src/data/sample-items';
 import { colors } from '../../src/theme/colors';
-import { spacing, radius } from '../../src/theme/tokens';
+import { spacing } from '../../src/theme/tokens';
 
-/**
- * Solo Wafflr Wheel placeholder.
- * Physics-based deceleration + haptics will be implemented with Reanimated
- * (see animation-haptic-constants.md).
- */
 export default function SoloWheelScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const bg = isDark ? colors.canvas.dark : colors.canvas.light;
   const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
 
-  const onSpin = async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    } catch {
-      // no-op
-    }
-  };
+  const [lastWinner, setLastWinner] = useState<WheelSegment | null>(null);
+
+  const segments: WheelSegment[] = useMemo(
+    () =>
+      DINNER_ITEMS.map((item) => ({
+        id: item.id,
+        label: item.title,
+        emoji: item.emoji,
+        weight: 1,
+      })),
+    [],
+  );
+
+  const onSpinEnd = useCallback((segment: WheelSegment) => {
+    setLastWinner(segment);
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-      <Text style={[styles.title, { color: colors.brand.amber[500] }]}>Wafflr Wheel</Text>
-
-      <View style={styles.wheelPlaceholder}>
-        <Text style={[styles.placeholderLabel, { color: muted }]}>
-          Physics wheel coming next
-        </Text>
-      </View>
-
-      <Pressable
-        onPress={onSpin}
-        style={({ pressed }) => [
-          styles.spinBtn,
-          { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
-        ]}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.spinBtnText}>Spin</Text>
-      </Pressable>
+        <Text style={[styles.title, { color: colors.brand.amber[500] }]}>
+          Wafflr Wheel
+        </Text>
+        <Text style={[styles.subtitle, { color: muted }]}>
+          Physics spin · fair by chance
+        </Text>
 
-      <Pressable onPress={() => router.back()} style={styles.close}>
-        <Text style={{ color: muted, fontSize: 16 }}>Close</Text>
-      </Pressable>
+        <View style={styles.wheelWrap}>
+          <WafflrWheel segments={segments} size={300} onSpinEnd={onSpinEnd} />
+        </View>
+
+        {lastWinner ? (
+          <Text style={[styles.footerNote, { color: muted }]}>
+            Decided: {lastWinner.emoji} {lastWinner.label}
+          </Text>
+        ) : null}
+
+        <Pressable onPress={() => router.back()} style={styles.close}>
+          <Text style={{ color: muted, fontSize: 16 }}>Close</Text>
+        </Pressable>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -55,43 +75,31 @@ export default function SoloWheelScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scroll: {
     paddingHorizontal: spacing[6],
     alignItems: 'center',
+    paddingBottom: spacing[10],
   },
   title: {
-    marginTop: spacing[8],
+    marginTop: spacing[6],
     fontSize: 24,
     fontWeight: '800',
   },
-  wheelPlaceholder: {
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    borderWidth: 4,
-    borderColor: colors.brand.amber[500],
-    borderStyle: 'dashed',
-    marginTop: spacing[12],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderLabel: {
+  subtitle: {
+    marginTop: spacing[1],
     fontSize: 14,
     fontWeight: '500',
   },
-  spinBtn: {
-    marginTop: spacing[10],
-    backgroundColor: colors.brand.amber[500],
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[12],
-    borderRadius: radius.full,
+  wheelWrap: {
+    marginTop: spacing[8],
   },
-  spinBtnText: {
-    color: colors.brand.slate[900],
-    fontSize: 18,
-    fontWeight: '800',
+  footerNote: {
+    marginTop: spacing[4],
+    fontSize: 14,
   },
   close: {
-    marginTop: spacing[6],
+    marginTop: spacing[8],
     padding: spacing[3],
   },
 });
