@@ -29,8 +29,13 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+<<<<<<< HEAD
     "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.2",
+=======
+    "react-native-svg": "15.12.1",
+    "react-native-web": "~0.21.0",
+>>>>>>> 2207f092f220ef7299c90348b1e1533c0aeb7cab
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
