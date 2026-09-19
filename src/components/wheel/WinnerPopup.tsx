@@ -17,7 +17,6 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors } from '../../theme/colors';
 import { neu } from '../../theme/neumorph';
@@ -36,7 +35,7 @@ type Props = {
 const { width: SCREEN_W } = Dimensions.get('window');
 
 /**
- * Shiny pop-up card for wheel result — spring in, shimmer highlight.
+ * Shiny pop-up card for wheel result — spring in + moving highlight band.
  */
 export function WinnerPopup({
   visible,
@@ -89,11 +88,15 @@ export function WinnerPopup({
   const shineStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        translateX: interpolate(shine.value, [0, 1], [-SCREEN_W * 0.4, SCREEN_W * 0.5]),
+        translateX: interpolate(
+          shine.value,
+          [0, 1],
+          [-SCREEN_W * 0.35, SCREEN_W * 0.45],
+        ),
       },
       { rotate: '18deg' },
     ],
-    opacity: 0.35,
+    opacity: 0.4,
   }));
 
   return (
@@ -104,22 +107,11 @@ export function WinnerPopup({
 
         <Animated.View style={[styles.cardWrap, cardStyle]}>
           <View style={styles.card}>
-            {/* Shimmer band */}
-            <Animated.View style={[styles.shine, shineStyle]} pointerEvents="none">
-              <LinearGradient
-                colors={['transparent', 'rgba(255,255,255,0.85)', 'transparent']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </Animated.View>
+            <View style={styles.cardInner}>
+              <Animated.View style={[styles.shine, shineStyle]} pointerEvents="none">
+                <View style={styles.shineBand} />
+              </Animated.View>
 
-            <LinearGradient
-              colors={['#FFFBEB', '#FFFFFF', '#FEF3C7']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gradientFill}
-            >
               <Text style={styles.badge}>YOU GOT</Text>
               <Text style={styles.emoji}>{emoji}</Text>
               <Text style={styles.label}>{label}</Text>
@@ -147,7 +139,7 @@ export function WinnerPopup({
                   <Text style={styles.btnGhostText}>Nice</Text>
                 </Pressable>
               </View>
-            </LinearGradient>
+            </View>
           </View>
         </Animated.View>
       </View>
@@ -176,24 +168,30 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2.5,
     borderColor: colors.brand.amber[400],
+    backgroundColor: '#FFFBEB',
     shadowColor: colors.brand.amber[700],
     shadowOpacity: 0.35,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
     elevation: 12,
   },
-  gradientFill: {
+  cardInner: {
     paddingVertical: spacing[8],
     paddingHorizontal: spacing[6],
     alignItems: 'center',
     gap: spacing[2],
+    backgroundColor: '#FFFFFF',
   },
   shine: {
     position: 'absolute',
-    top: -40,
-    bottom: -40,
-    width: 70,
+    top: -50,
+    bottom: -50,
+    width: 64,
     zIndex: 3,
+  },
+  shineBand: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.75)',
   },
   badge: {
     fontSize: 12,

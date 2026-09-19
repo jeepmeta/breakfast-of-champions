@@ -4,7 +4,6 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  useColorScheme,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
@@ -16,67 +15,89 @@ import {
   WafflrWheel,
   type WheelSegment,
 } from '../../src/components/wheel/WafflrWheel';
+import { WinnerPopup } from '../../src/components/wheel/WinnerPopup';
 import {
-  CATALOGS,
-  getCatalogItems,
-  type CatalogId,
-} from '../../src/data/catalogs';
+  WHEEL_TOPICS,
+  getTopic,
+  getVariation,
+  type WheelTopicId,
+  type WheelVariationId,
+} from '../../src/data/wheel-topics';
 import { useRoom } from '../../src/room/RoomContext';
 import { useSessionLists } from '../../src/session/SessionListsContext';
 import { colors } from '../../src/theme/colors';
+import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
 
-type InstantMode = Extract<CatalogId, 'dinner' | 'movies' | 'activities'>;
-
-const MODE_COPY: Record<
-  InstantMode,
-  { title: string; question: string }
-> = {
-  dinner: { title: 'Eat', question: 'What should we eat?' },
-  movies: { title: 'Watch', question: 'What should we watch?' },
-  activities: { title: 'Do', question: 'What should we do?' },
-};
-
 /**
- * Solo wheel hub — three instant catalogs + open room for invites / location modes.
+ * Basic solo wheel — Eat / Watch / Do with meal, media, and activity variations.
+ * Vision: room spin lands on a topic → generate place/title cards → swipe match.
  */
 export default function PlayWheelScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const bg = isDark ? colors.canvas.dark : colors.canvas.light;
-  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
-  const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
-  const cardBg = isDark ? colors.elevated.dark : colors.elevated.light;
-
-  const [mode, setMode] = useState<InstantMode>('dinner');
-  const [lastWinner, setLastWinner] = useState<WheelSegment | null>(null);
+  const [topicId, setTopicId] = useState<WheelTopicId>('eat');
+  const [variationId, setVariationId] = useState<WheelVariationId>('dinner');
+  const [winner, setWinner] = useState<WheelSegment | null>(null);
+  const [popupOpen, setPopupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [wheelKey, setWheelKey] = useState(0);
 
   const { create, isLoading } = useRoom();
   const { upsertRoom } = useSessionLists();
 
-  const segments: WheelSegment[] = useMemo(() => {
-    return getCatalogItems(mode).map((item) => ({
-      id: item.id,
-      label: item.title,
-      emoji: item.emoji,
-      weight: 1,
-    }));
-  }, [mode]);
+  const topic = useMemo(() => getTopic(topicId), [topicId]);
+  const variation = useMemo(
+    () => getVariation(topicId, variationId),
+    [topicId, variationId],
+  );
 
-  const onSpinEnd = useCallback((segment: WheelSegment) => {
-    setLastWinner(segment);
-  }, []);
+  const segments: WheelSegment[] = useMemo(
+    () =>
+      variation.segments.map((s) => ({
+        id: s.id,
+        label: s.label,
+        emoji: s.emoji,
+        weight: 1,
+      })),
+    [variation],
+  );
 
-  const selectMode = async (next: InstantMode) => {
-    if (next === mode) return;
+  const selectTopic = async (id: WheelTopicId) => {
+    if (id === topicId) return;
     try {
       await Haptics.selectionAsync();
     } catch {
       // ignore
     }
-    setLastWinner(null);
-    setMode(next);
+    const next = getTopic(id);
+    setTopicId(id);
+    setVariationId(next.variations[0].id);
+    setWinner(null);
+    setPopupOpen(false);
+    setWheelKey((k) => k + 1);
+  };
+
+  const selectVariation = async (id: WheelVariationId) => {
+    if (id === variationId) return;
+    try {
+      await Haptics.selectionAsync();
+    } catch {
+      // ignore
+    }
+    setVariationId(id);
+    setWinner(null);
+    setPopupOpen(false);
+    setWheelKey((k) => k + 1);
+  };
+
+  const onSpinEnd = useCallback((segment: WheelSegment) => {
+    setWinner(segment);
+    setPopupOpen(true);
+  }, []);
+
+  const spinAgain = () => {
+    setPopupOpen(false);
+    setWinner(null);
+    setWheelKey((k) => k + 1);
   };
 
   const openWheelRoom = async () => {
@@ -99,78 +120,83 @@ export default function PlayWheelScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+    <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={{ color: muted, fontWeight: '700' }}>← Back</Text>
+          <Text style={styles.back}>← Back</Text>
         </Pressable>
 
-        <Text style={[styles.title, { color: text }]}>Wheel</Text>
-        <Text style={[styles.sub, { color: muted }]}>
-          Instant spins for eat / watch / do. Open a room for invites, custom lists,
-          and nearby places from your location.
+        <Text style={styles.title}>Wheel</Text>
+        <Text style={styles.sub}>
+          Pick a subject, spin once, decide. In a room this topic seeds swipe cards
+          next.
         </Text>
 
-        <View style={styles.modeRow}>
-          {CATALOGS.map((c) => {
-            const active = mode === c.id;
+        {/* Topic: Eat / Watch / Do */}
+        <View style={styles.topicRow}>
+          {WHEEL_TOPICS.map((t) => {
+            const active = topicId === t.id;
             return (
               <Pressable
-                key={c.id}
-                onPress={() => selectMode(c.id as InstantMode)}
+                key={t.id}
+                onPress={() => selectTopic(t.id)}
                 style={[
-                  styles.modeChip,
-                  {
-                    backgroundColor: active
-                      ? colors.brand.amber[500]
-                      : cardBg,
-                    borderColor: active
-                      ? colors.brand.amber[500]
-                      : isDark
-                        ? colors.border.dark
-                        : colors.border.light,
-                  },
+                  styles.topicChip,
+                  active && styles.topicChipActive,
                 ]}
               >
-                <Text style={styles.modeEmoji}>{c.emoji}</Text>
+                <Text style={styles.topicEmoji}>{t.emoji}</Text>
                 <Text
                   style={[
-                    styles.modeLabel,
-                    {
-                      color: active
-                        ? colors.brand.slate[900]
-                        : text,
-                    },
+                    styles.topicLabel,
+                    active && styles.topicLabelActive,
                   ]}
                 >
-                  {MODE_COPY[c.id as InstantMode]?.title ?? c.label}
+                  {t.label}
                 </Text>
               </Pressable>
             );
           })}
         </View>
 
-        <Text style={[styles.question, { color: muted }]}>
-          {MODE_COPY[mode].question}
-        </Text>
+        {/* Variations */}
+        <View style={styles.varRow}>
+          {topic.variations.map((v) => {
+            const active = variationId === v.id;
+            return (
+              <Pressable
+                key={v.id}
+                onPress={() => selectVariation(v.id)}
+                style={[styles.varPill, active && styles.varPillActive]}
+              >
+                <Text style={styles.varEmoji}>{v.emoji}</Text>
+                <Text
+                  style={[styles.varLabel, active && styles.varLabelActive]}
+                >
+                  {v.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.question}>{variation.question}</Text>
 
         <View style={styles.wheelWrap}>
           <WafflrWheel
-            key={mode}
+            key={`${topicId}-${variationId}-${wheelKey}`}
             segments={segments}
             size={280}
             onSpinEnd={onSpinEnd}
+            hideResult
+            tickHaptics={false}
+            spinStartHaptic
+            settleHaptic={false}
           />
         </View>
-
-        {lastWinner ? (
-          <Text style={[styles.decided, { color: colors.brand.emerald[500] }]}>
-            Decided: {lastWinner.emoji} {lastWinner.label}
-          </Text>
-        ) : null}
 
         <Pressable
           onPress={openWheelRoom}
@@ -184,16 +210,25 @@ export default function PlayWheelScreen() {
             <ActivityIndicator color={colors.brand.slate[900]} />
           ) : (
             <Text style={styles.roomBtnText}>
-              Open wheel room · invites & nearby
+              Open room · spin then swipe
             </Text>
           )}
         </Pressable>
 
-        <Text style={[styles.footnote, { color: muted }]}>
-          In-room: custom segments, group spin, and location lists for food, movies,
-          or activities near you.
+        <Text style={styles.footnote}>
+          Coming: land on Sushi → nearby sushi cards. Land on Sci-Fi → popular
+          titles. Everyone swipes; matches rank top to bottom.
         </Text>
       </ScrollView>
+
+      <WinnerPopup
+        visible={popupOpen && !!winner}
+        emoji={winner?.emoji ?? '✨'}
+        label={winner?.label ?? ''}
+        subtitle={`${topic.label} · ${variation.label}`}
+        onClose={() => setPopupOpen(false)}
+        onSpinAgain={spinAgain}
+      />
     </SafeAreaView>
   );
 }
@@ -201,6 +236,7 @@ export default function PlayWheelScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: neu.canvas,
   },
   scroll: {
     paddingHorizontal: spacing[6],
@@ -208,66 +244,116 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
     gap: spacing[3],
   },
+  back: {
+    color: neu.muted,
+    fontWeight: '700',
+  },
   title: {
     fontSize: 28,
     fontWeight: '800',
+    color: neu.text,
   },
   sub: {
     fontSize: 15,
     lineHeight: 22,
+    color: neu.muted,
   },
-  modeRow: {
+  topicRow: {
     flexDirection: 'row',
     gap: spacing[2],
-    marginTop: spacing[2],
+    marginTop: spacing[1],
   },
-  modeChip: {
+  topicChip: {
     flex: 1,
     borderWidth: 1.5,
     borderRadius: radius.lg,
     paddingVertical: spacing[3],
     alignItems: 'center',
     gap: 2,
+    backgroundColor: neu.card,
+    borderColor: neu.borderSoft,
+    shadowColor: neu.shadowSoft.color,
+    shadowOpacity: neu.shadowSoft.opacity,
+    shadowRadius: neu.shadowSoft.radius,
+    shadowOffset: neu.shadowSoft.offset,
+    elevation: neu.shadowSoft.elevation,
   },
-  modeEmoji: {
+  topicChipActive: {
+    backgroundColor: colors.brand.amber[500],
+    borderColor: colors.brand.amber[600],
+  },
+  topicEmoji: {
     fontSize: 22,
   },
-  modeLabel: {
+  topicLabel: {
     fontSize: 13,
     fontWeight: '800',
+    color: neu.text,
+  },
+  topicLabelActive: {
+    color: colors.brand.slate[900],
+  },
+  varRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  varPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+    backgroundColor: neu.card,
+    borderWidth: 1.5,
+    borderColor: neu.borderSoft,
+  },
+  varPillActive: {
+    backgroundColor: colors.brand.pink[100],
+    borderColor: colors.brand.pink[500],
+  },
+  varEmoji: {
+    fontSize: 14,
+  },
+  varLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: neu.text,
+  },
+  varLabelActive: {
+    color: colors.brand.pink[700],
   },
   question: {
     textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: spacing[1],
+    fontSize: 15,
+    fontWeight: '700',
+    color: neu.muted,
   },
   wheelWrap: {
     alignItems: 'center',
-    marginTop: spacing[2],
-  },
-  decided: {
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '800',
+    marginTop: spacing[1],
   },
   roomBtn: {
     marginTop: spacing[4],
-    backgroundColor: colors.brand.amber[500],
-    minHeight: 54,
+    backgroundColor: colors.brand.amber[400],
+    minHeight: 52,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing[4],
+    borderWidth: 1.5,
+    borderColor: colors.brand.amber[500],
   },
   roomBtnText: {
     color: colors.brand.slate[900],
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
   footnote: {
     textAlign: 'center',
     fontSize: 12,
     lineHeight: 18,
+    color: neu.muted,
   },
 });
