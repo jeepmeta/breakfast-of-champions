@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Fredoka_600SemiBold, Fredoka_700Bold } from '@expo-google-fonts/fredoka';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, useColorScheme } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { RoomProvider } from '../src/room/RoomContext';
 import { SessionListsProvider } from '../src/session/SessionListsContext';
@@ -15,9 +15,6 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
   const [fontsLoaded, fontError] = useFonts({
     Fredoka_600SemiBold,
     Fredoka_700Bold,
@@ -39,14 +36,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SessionListsProvider>
         <RoomProvider>
-          <StatusBar style={isDark ? 'light' : 'dark'} />
+          <StatusBar style="dark" />
           <Stack
             screenOptions={{
               headerShown: false,
               contentStyle: {
-                backgroundColor: isDark
-                  ? colors.canvas.dark
-                  : colors.canvas.light,
+                backgroundColor: '#FFF8EB',
               },
               animation: 'fade',
             }}
@@ -54,11 +49,17 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
               name="play/dice"
-              options={{ animation: 'slide_from_left' }}
+              options={{
+                animation: 'slide_from_left',
+                animationDuration: 320,
+              }}
             />
             <Stack.Screen
               name="play/wheel"
-              options={{ animation: 'slide_from_right' }}
+              options={{
+                animation: 'slide_from_right',
+                animationDuration: 320,
+              }}
             />
             <Stack.Screen
               name="room/[code]"
@@ -78,5 +79,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: '#FFF8EB',
   },
 });

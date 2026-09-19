@@ -1,36 +1,29 @@
-import { Text, StyleSheet, type TextStyle, type StyleProp } from 'react-native';
+import { Text, StyleSheet, type TextStyle } from 'react-native';
 import { colors } from '../../theme/colors';
 import { fonts } from '../../theme/fonts';
 
 type Props = {
   size?: number;
   color?: string;
-  /** Prefer Bold for primary lockup; SemiBold for smaller UI chrome */
-  weight?: 'bold' | 'semibold';
-  style?: StyleProp<TextStyle>;
+  style?: TextStyle;
 };
 
 /**
- * Product wordmark — Fredoka Bold (branding kit live text).
+ * Fredoka Bold bubble wordmark — branding kit display type.
  */
 export function WafflrWordmark({
-  size = 40,
+  size = 36,
   color = colors.brand.amber[500],
-  weight = 'bold',
   style,
 }: Props) {
-  const fontFamily =
-    weight === 'semibold' ? fonts.fredoka.semibold : fonts.fredoka.bold;
-
   return (
     <Text
       style={[
-        styles.wordmark,
+        styles.word,
         {
-          fontFamily,
           fontSize: size,
           color,
-          letterSpacing: size > 32 ? 0.5 : 0.25,
+          fontFamily: fonts.display,
         },
         style,
       ]}
@@ -41,7 +34,8 @@ export function WafflrWordmark({
 }
 
 const styles = StyleSheet.create({
-  wordmark: {
-    // weight comes from the loaded Fredoka face, not system fontWeight
+  word: {
+    fontWeight: '700',
+    letterSpacing: -0.5,
   },
 });
