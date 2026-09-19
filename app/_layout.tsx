@@ -8,11 +8,13 @@ import { StyleSheet } from 'react-native';
 
 import { RoomProvider } from '../src/room/RoomContext';
 import { SessionListsProvider } from '../src/session/SessionListsContext';
-import { colors } from '../src/theme/colors';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // ignore if already prevented
 });
+
+/** Keep stack transitions snappy app-wide (~native iOS feel). */
+const FAST_MS = 200;
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -44,6 +46,7 @@ export default function RootLayout() {
                 backgroundColor: '#FFF8EB',
               },
               animation: 'fade',
+              animationDuration: FAST_MS,
             }}
           >
             <Stack.Screen name="(tabs)" />
@@ -51,23 +54,26 @@ export default function RootLayout() {
               name="play/dice"
               options={{
                 animation: 'slide_from_left',
-                animationDuration: 320,
+                animationDuration: FAST_MS,
               }}
             />
             <Stack.Screen
               name="play/wheel"
               options={{
                 animation: 'slide_from_right',
-                animationDuration: 320,
+                animationDuration: FAST_MS,
               }}
             />
             <Stack.Screen
               name="room/[code]"
-              options={{ animation: 'slide_from_right' }}
+              options={{
+                animation: 'slide_from_right',
+                animationDuration: FAST_MS,
+              }}
             />
             <Stack.Screen
               name="solo/wheel"
-              options={{ presentation: 'modal' }}
+              options={{ presentation: 'modal', animationDuration: FAST_MS }}
             />
           </Stack>
         </RoomProvider>

@@ -10,7 +10,6 @@ import {
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -18,11 +17,9 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
-  runOnJS,
   Easing,
   interpolate,
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
 
 import { useRoom } from '../../src/room/RoomContext';
 import { useSessionLists } from '../../src/session/SessionListsContext';
@@ -33,11 +30,9 @@ import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
 import { SPRINGS } from '../../src/constants/springs';
 
-const SWIPE_THRESHOLD = 56;
 const SCREEN_W = Dimensions.get('window').width;
 
 type CardId = 'dice' | 'wheel' | 'room' | 'bracket';
-type Dir = 'left' | 'right';
 
 type CardConfig = {
   id: CardId;
@@ -46,186 +41,91 @@ type CardConfig = {
   emoji: string;
   accent: string;
   accentSoft: string;
-  dir: Dir;
 };
 
 const CARDS: CardConfig[] = [
   {
     id: 'dice',
     title: 'Dice',
-    subtitle: 'Swipe left',
+    subtitle: 'Tap to roll',
     emoji: '🎲',
     accent: colors.brand.pink[500],
     accentSoft: colors.brand.pink[100],
-    dir: 'left',
   },
   {
     id: 'wheel',
     title: 'Wheel',
-    subtitle: 'Swipe right',
+    subtitle: 'Tap to spin',
     emoji: '🎡',
     accent: colors.brand.amber[500],
     accentSoft: colors.brand.amber[100],
-    dir: 'right',
   },
   {
     id: 'room',
     title: 'Room',
-    subtitle: 'Swipe left',
+    subtitle: 'Play together',
     emoji: '🏠',
     accent: colors.brand.emerald[500],
     accentSoft: colors.brand.emerald[100],
-    dir: 'left',
   },
   {
     id: 'bracket',
     title: 'Bracket',
-    subtitle: 'Swipe right',
+    subtitle: 'Elimination',
     emoji: '🏆',
     accent: colors.brand.amber[600],
     accentSoft: '#FEF3C7',
-    dir: 'right',
   },
 ];
 
-function BounceArrow({
-  direction,
-  color,
-}: {
-  direction: Dir;
-  color: string;
-}) {
-  const bob = useSharedValue(0);
-
-  useEffect(() => {
-    bob.value = withRepeat(
-      withSequence(
-        withSpring(1, SPRINGS.gentle),
-        withSpring(0, SPRINGS.gentle),
-      ),
-      -1,
-      false,
-    );
-  }, [bob]);
-
-  const style = useAnimatedStyle(() => {
-    const shift = interpolate(bob.value, [0, 1], [0, direction === 'left' ? -6 : 6]);
-    return {
-      transform: [{ translateX: shift }],
-      opacity: interpolate(bob.value, [0, 1], [0.75, 1]),
-    };
-  });
-
-  return (
-    <Animated.View style={[styles.arrowChip, { borderColor: color }, style]}>
-      <Ionicons
-        name={direction === 'left' ? 'chevron-back' : 'chevron-forward'}
-        size={16}
-        color={color}
-      />
-    </Animated.View>
-  );
-}
-
-function SwipeGameCard({
+function TapGameCard({
   config,
   disabled,
-  onActivate,
+  onPress,
 }: {
   config: CardConfig;
   disabled: boolean;
-  onActivate: () => void;
+  onPress: () => void;
 }) {
-  const x = useSharedValue(0);
-  const opacity = useSharedValue(1);
   const scale = useSharedValue(1);
 
-  const exit = () => {
-    const target = config.dir === 'left' ? -SCREEN_W : SCREEN_W;
-    // Spring fling off-screen — candy pop feel
-    x.value = withSpring(target, SPRINGS.exit, (finished) => {
-      if (finished) runOnJS(onActivate)();
-    });
-    opacity.value = withTiming(0.2, { duration: 280 });
-    scale.value = withSpring(0.92, SPRINGS.snappy);
-  };
-
-  const pan = Gesture.Pan()
-    .enabled(!disabled)
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-28, 28])
-    .onUpdate((e) => {
-      if (config.dir === 'left') {
-        x.value = Math.min(0, Math.max(-SCREEN_W * 0.5, e.translationX));
-      } else {
-        x.value = Math.max(0, Math.min(SCREEN_W * 0.5, e.translationX));
-      }
-      const progress = Math.min(1, Math.abs(x.value) / (SCREEN_W * 0.4));
-      scale.value = 1 - progress * 0.04;
-    })
-    .onEnd((e) => {
-      const crossed =
-        config.dir === 'left'
-          ? e.translationX <= -SWIPE_THRESHOLD || e.velocityX < -550
-          : e.translationX >= SWIPE_THRESHOLD || e.velocityX > 550;
-      if (crossed) {
-        runOnJS(exit)();
-      } else {
-        x.value = withSpring(0, SPRINGS.snappy);
-        scale.value = withSpring(1, SPRINGS.bouncy);
-      }
-    });
-
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: x.value }, { scale: scale.value }],
-    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
   }));
 
-  useEffect(() => {
-    if (!disabled) {
-      x.value = 0;
-      opacity.value = 1;
-      scale.value = 1;
-    }
-  }, [disabled, opacity, scale, x]);
+  const handlePressIn = () => {
+    scale.value = withSpring(0.96, SPRINGS.stiff);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, SPRINGS.snappy);
+  };
 
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View style={[styles.cardSlot, animStyle]}>
-        <Pressable
-          onPress={exit}
-          disabled={disabled}
-          style={({ pressed }) => [
-            styles.gameCard,
-            {
-              borderColor: config.accent,
-              opacity: pressed ? 0.94 : 1,
-            },
-          ]}
-        >
-          <View
-            style={[styles.cardGlow, { backgroundColor: config.accentSoft }]}
-          />
-          <Text style={styles.gameEmoji}>{config.emoji}</Text>
-          <Text style={styles.gameTitle}>{config.title}</Text>
-          <Text style={[styles.gameSub, { color: config.accent }]}>
-            {config.subtitle}
-          </Text>
-
-          <View
-            style={[
-              styles.cardArrow,
-              config.dir === 'left'
-                ? styles.cardArrowLeft
-                : styles.cardArrowRight,
-            ]}
-            pointerEvents="none"
-          >
-            <BounceArrow direction={config.dir} color={config.accent} />
-          </View>
-        </Pressable>
-      </Animated.View>
-    </GestureDetector>
+    <Animated.View style={[styles.cardSlot, animStyle]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled}
+        style={[
+          styles.gameCard,
+          {
+            borderColor: config.accent,
+            opacity: disabled ? 0.55 : 1,
+          },
+        ]}
+      >
+        <View
+          style={[styles.cardGlow, { backgroundColor: config.accentSoft }]}
+        />
+        <Text style={styles.gameEmoji}>{config.emoji}</Text>
+        <Text style={styles.gameTitle}>{config.title}</Text>
+        <Text style={[styles.gameSub, { color: config.accent }]}>
+          {config.subtitle}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -281,90 +181,69 @@ function AnimatedHero() {
   );
 }
 
+/** Fire haptic without awaiting — never block navigation. */
+function bump() {
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+    () => undefined,
+  );
+}
+
 export default function HomeScreen() {
   const { create, isLoading } = useRoom();
   const { upsertRoom, upsertBracket } = useSessionLists();
   const [busy, setBusy] = useState<CardId | null>(null);
-  const [navigating, setNavigating] = useState(false);
-
-  const afterNav = () => {
-    setTimeout(() => {
-      setNavigating(false);
-      setBusy(null);
-    }, 450);
-  };
 
   const openDice = () => {
-    if (navigating) return;
-    setNavigating(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-      () => undefined,
-    );
+    if (busy) return;
+    bump();
     router.push('/play/dice');
-    afterNav();
   };
 
   const openWheel = () => {
-    if (navigating) return;
-    setNavigating(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-      () => undefined,
-    );
+    if (busy) return;
+    bump();
     router.push('/play/wheel');
-    afterNav();
   };
 
-  const createRoom = async () => {
-    if (navigating || busy || isLoading) return;
+  const createRoom = () => {
+    if (busy || isLoading) return;
+    bump();
     setBusy('room');
-    setNavigating(true);
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // ignore
-    }
-    try {
-      const { code } = await create({ displayName: 'You' });
-      upsertRoom({ code, title: `Room ${code}`, role: 'host' });
-      router.push(`/room/${code}`);
-    } catch {
-      setNavigating(false);
-      setBusy(null);
-      return;
-    }
-    afterNav();
+    void (async () => {
+      try {
+        const { code } = await create({ displayName: 'You' });
+        upsertRoom({ code, title: `Room ${code}`, role: 'host' });
+        router.push(`/room/${code}`);
+      } catch {
+        // stay
+      } finally {
+        setBusy(null);
+      }
+    })();
   };
 
-  const createBracket = async () => {
-    if (navigating || busy || isLoading) return;
+  const createBracket = () => {
+    if (busy || isLoading) return;
+    bump();
     setBusy('bracket');
-    setNavigating(true);
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // ignore
-    }
-    try {
-      const { code } = await create({ displayName: 'You' });
-      upsertBracket({ code, title: `Bracket ${code}`, role: 'host' });
-      router.push(`/room/${code}`);
-    } catch {
-      setNavigating(false);
-      setBusy(null);
-      return;
-    }
-    afterNav();
+    void (async () => {
+      try {
+        const { code } = await create({ displayName: 'You' });
+        upsertBracket({ code, title: `Bracket ${code}`, role: 'host' });
+        router.push(`/room/${code}`);
+      } catch {
+        // stay
+      } finally {
+        setBusy(null);
+      }
+    })();
   };
 
   const handlers: Record<CardId, () => void> = {
     dice: openDice,
     wheel: openWheel,
-    room: () => {
-      void createRoom();
-    },
-    bracket: () => {
-      void createBracket();
-    },
+    room: createRoom,
+    bracket: createBracket,
   };
 
   return (
@@ -372,15 +251,15 @@ export default function HomeScreen() {
       <AnimatedHero />
 
       <View style={styles.gridBlock}>
-        <Text style={styles.hint}>Swipe a card · instant dopamine</Text>
+        <Text style={styles.hint}>Tap a card · go</Text>
 
         <View style={styles.grid}>
           {CARDS.map((c) => (
-            <SwipeGameCard
+            <TapGameCard
               key={c.id}
               config={c}
-              disabled={navigating || !!busy}
-              onActivate={handlers[c.id]}
+              disabled={!!busy}
+              onPress={handlers[c.id]}
             />
           ))}
         </View>
@@ -484,31 +363,6 @@ const styles = StyleSheet.create({
   gameSub: {
     fontSize: 11,
     fontWeight: '700',
-  },
-  cardArrow: {
-    position: 'absolute',
-    top: '50%',
-    marginTop: -14,
-  },
-  cardArrowLeft: {
-    left: 6,
-  },
-  cardArrowRight: {
-    right: 6,
-  },
-  arrowChip: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    backgroundColor: neu.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   busyRow: {
     flexDirection: 'row',
