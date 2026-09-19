@@ -1,8 +1,7 @@
 /**
  * Self-contained Three.js + Cannon-es dice table.
- * Adapted from https://codepen.io/Mant0uStudio/pen/ZYWywJB (physics / feel).
- * Branded for Wafflr: cream canvas, amber/pink/emerald dice, 1–5 count.
- * Controlled via window.wafflrSetCount / wafflrRoll; results postMessage to RN.
+ * Adapted from https://codepen.io/Mant0uStudio/pen/ZYWywJB
+ * Hard in-view bounds so dice never leave the stage.
  */
 export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
 <html>
@@ -34,9 +33,11 @@ let scene, camera, renderer, world;
 let diceObjects = [];
 let needsResultCheck = false;
 let isRolling = false;
-const FRUSTUM_SIZE = 22;
+const FRUSTUM_SIZE = 20;
+const WALL = 7.5;
+const CLAMP = 6.8;
+const BOX = 2.4;
 
-// Wafflr brand palette
 const palette = [
   "#F59E0B", "#EC4899", "#10B981", "#FBBF24",
   "#F472B6", "#34D399", "#FFFFFF", "#D97706"
@@ -68,7 +69,7 @@ function init() {
     1,
     1000
   );
-  camera.position.set(50, 50, 50);
+  camera.position.set(48, 48, 48);
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -78,17 +79,17 @@ function init() {
   document.body.appendChild(renderer.domElement);
 
   world = new CANNON.World();
-  world.gravity.set(0, -40, 0);
+  world.gravity.set(0, -42, 0);
   world.broadphase = new CANNON.NaiveBroadphase();
-  world.solver.iterations = 20;
+  world.solver.iterations = 24;
   world.allowSleep = true;
 
   const wallMat = new CANNON.Material("wall");
   const diceMat = new CANNON.Material("dice");
   world.addContactMaterial(
     new CANNON.ContactMaterial(wallMat, diceMat, {
-      friction: 0.3,
-      restitution: 0.6,
+      friction: 0.35,
+      restitution: 0.45,
     })
   );
 
@@ -106,7 +107,12 @@ function createPhysicsWalls(material) {
   floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
   world.addBody(floorBody);
 
-  const wallDistance = 11;
+  const ceil = new CANNON.Body({ mass: 0, material });
+  ceil.addShape(new CANNON.Plane());
+  ceil.position.set(0, 16, 0);
+  ceil.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+  world.addBody(ceil);
+
   const createWall = (x, z, rot) => {
     const body = new CANNON.Body({ mass: 0, material });
     body.addShape(new CANNON.Plane());
@@ -114,10 +120,10 @@ function createPhysicsWalls(material) {
     body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), rot);
     world.addBody(body);
   };
-  createWall(wallDistance, 0, -Math.PI / 2);
-  createWall(-wallDistance, 0, Math.PI / 2);
-  createWall(0, -wallDistance, 0);
-  createWall(0, wallDistance, Math.PI);
+  createWall(WALL, 0, -Math.PI / 2);
+  createWall(-WALL, 0, Math.PI / 2);
+  createWall(0, -WALL, 0);
+  createWall(0, WALL, Math.PI);
 }
 
 function createVectorDiceTexture(number, colorHex) {
@@ -128,8 +134,6 @@ function createVectorDiceTexture(number, colorHex) {
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = colorHex;
   ctx.fillRect(0, 0, size, size);
-
-  // soft bevel highlight
   const grd = ctx.createLinearGradient(0, 0, size, size);
   grd.addColorStop(0, "rgba(255,255,255,0.35)");
   grd.addColorStop(0.45, "rgba(255,255,255,0)");
@@ -179,11 +183,10 @@ function updateDiceCount(count) {
   needsResultCheck = false;
   isRolling = false;
 
-  const boxSize = 2.5;
-  const geometry = new RoundedBoxGeometry(boxSize, boxSize, boxSize, 4, 0.4);
+  const geometry = new RoundedBoxGeometry(BOX, BOX, BOX, 4, 0.35);
   const outlineGeo = geometry.clone();
-  const shadowGeo = new THREE.CircleGeometry(boxSize * 0.6, 32);
-  const shape = new CANNON.Box(new CANNON.Vec3(boxSize / 2, boxSize / 2, boxSize / 2));
+  const shadowGeo = new THREE.CircleGeometry(BOX * 0.55, 32);
+  const shape = new CANNON.Box(new CANNON.Vec3(BOX / 2, BOX / 2, BOX / 2));
   const outlineMat = new THREE.MeshBasicMaterial({
     color: commonColors.outline,
     side: THREE.BackSide,
@@ -210,7 +213,7 @@ function updateDiceCount(count) {
     scene.add(mesh);
 
     const outline = new THREE.Mesh(outlineGeo, outlineMat);
-    outline.scale.setScalar(1.06);
+    outline.scale.setScalar(1.05);
     scene.add(outline);
 
     const shadow = new THREE.Mesh(shadowGeo, shadowMat.clone());
@@ -218,12 +221,14 @@ function updateDiceCount(count) {
     shadow.position.y = 0.01;
     scene.add(shadow);
 
-    const startX = (i - (count - 1) / 2) * 3.2;
+    const startX = (i - (count - 1) / 2) * 2.8;
     const body = new CANNON.Body({
       mass: 5,
       shape,
-      position: new CANNON.Vec3(startX, boxSize + 0.2, 0),
-      sleepSpeedLimit: 0.5,
+      position: new CANNON.Vec3(startX, BOX + 0.15, 0),
+      sleepSpeedLimit: 0.45,
+      linearDamping: 0.12,
+      angularDamping: 0.12,
     });
     body.quaternion.setFromEuler(
       Math.random() * Math.PI,
@@ -237,18 +242,32 @@ function updateDiceCount(count) {
 }
 
 function applyThrowForce(body) {
-  const xDist = -body.position.x;
-  const zDist = -body.position.z;
+  const towardCenterX = -body.position.x * 1.1;
+  const towardCenterZ = -body.position.z * 1.1;
   body.velocity.set(
-    xDist * 1.4 + (Math.random() - 0.5) * 14,
-    8 + Math.random() * 12,
-    zDist * 1.4 + (Math.random() - 0.5) * 14
+    towardCenterX + (Math.random() - 0.5) * 8,
+    6 + Math.random() * 8,
+    towardCenterZ + (Math.random() - 0.5) * 8
   );
   body.angularVelocity.set(
-    (Math.random() - 0.5) * 32,
-    (Math.random() - 0.5) * 32,
-    (Math.random() - 0.5) * 32
+    (Math.random() - 0.5) * 28,
+    (Math.random() - 0.5) * 28,
+    (Math.random() - 0.5) * 28
   );
+}
+
+function clampBody(body) {
+  let x = body.position.x;
+  let z = body.position.z;
+  let y = body.position.y;
+  let hit = false;
+  if (x > CLAMP) { x = CLAMP; body.velocity.x *= -0.35; hit = true; }
+  if (x < -CLAMP) { x = -CLAMP; body.velocity.x *= -0.35; hit = true; }
+  if (z > CLAMP) { z = CLAMP; body.velocity.z *= -0.35; hit = true; }
+  if (z < -CLAMP) { z = -CLAMP; body.velocity.z *= -0.35; hit = true; }
+  if (y > 14) { y = 14; body.velocity.y *= -0.2; hit = true; }
+  if (y < BOX / 2) { y = BOX / 2; }
+  if (hit) body.position.set(x, y, z);
 }
 
 function rollDice() {
@@ -260,12 +279,11 @@ function rollDice() {
   diceObjects.forEach((obj, i) => {
     const body = obj.body;
     body.wakeUp();
-    // lift + scatter then throw
-    const startX = (i - (diceObjects.length - 1) / 2) * 2.8;
+    const startX = (i - (diceObjects.length - 1) / 2) * 2.4;
     body.position.set(
-      startX + (Math.random() - 0.5) * 1.5,
-      10 + Math.random() * 4,
-      (Math.random() - 0.5) * 2
+      Math.max(-CLAMP + 0.5, Math.min(CLAMP - 0.5, startX + (Math.random() - 0.5) * 0.8)),
+      8 + Math.random() * 3,
+      (Math.random() - 0.5) * 1.2
     );
     body.velocity.set(0, 0, 0);
     body.angularVelocity.set(0, 0, 0);
@@ -274,7 +292,7 @@ function rollDice() {
 
   setTimeout(() => {
     needsResultCheck = true;
-  }, 600);
+  }, 550);
 }
 
 function calculateResult() {
@@ -312,6 +330,7 @@ function animate() {
 
   for (let i = 0; i < diceObjects.length; i++) {
     const { mesh, outline, shadow, body } = diceObjects[i];
+    clampBody(body);
     mesh.position.copy(body.position);
     mesh.quaternion.copy(body.quaternion);
     outline.position.copy(mesh.position);

@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { PHYSICS_DICE_HTML } from './physicsDiceHtml';
+import { DiceResultPopup } from './DiceResultPopup';
 import { colors } from '../../theme/colors';
 import { neu } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
@@ -23,15 +24,10 @@ import { SPRINGS } from '../../constants/springs';
 type DiceCount = 1 | 2 | 3 | 4 | 5;
 
 type Props = {
-  /** Unused visually — physics table sizes itself; kept for API compat */
   dieSize?: number;
 };
 
-/**
- * Physics dice table (Three.js + Cannon-es) adapted from
- * https://codepen.io/Mant0uStudio/pen/ZYWywJB
- * RN chrome: 1–5 pills, ROLL button, single haptic on roll.
- */
+/** Physics dice table + animated total popup. */
 export function DiceRoller(_props: Props) {
   const webRef = useRef<WebView>(null);
   const [count, setCount] = useState<DiceCount>(1);
@@ -39,6 +35,7 @@ export function DiceRoller(_props: Props) {
   const [ready, setReady] = useState(false);
   const [total, setTotal] = useState<number | null>(null);
   const [details, setDetails] = useState<number[]>([]);
+  const [popupOpen, setPopupOpen] = useState(false);
 
   const btnScale = useSharedValue(1);
   const btnStyle = useAnimatedStyle(() => ({
@@ -49,35 +46,40 @@ export function DiceRoller(_props: Props) {
     webRef.current?.injectJavaScript(`${js}; true;`);
   }, []);
 
-  const onMessage = useCallback((e: WebViewMessageEvent) => {
-    try {
-      const data = JSON.parse(e.nativeEvent.data) as {
-        type: string;
-        total?: number;
-        details?: number[];
-        count?: number;
-      };
-      if (data.type === 'ready') {
-        setReady(true);
-        inject(`window.wafflrSetCount && window.wafflrSetCount(${count})`);
-      } else if (data.type === 'rolling') {
-        setRolling(true);
-        setTotal(null);
-      } else if (data.type === 'result') {
-        setRolling(false);
-        setTotal(data.total ?? 0);
-        setDetails(data.details ?? []);
+  const onMessage = useCallback(
+    (e: WebViewMessageEvent) => {
+      try {
+        const data = JSON.parse(e.nativeEvent.data) as {
+          type: string;
+          total?: number;
+          details?: number[];
+        };
+        if (data.type === 'ready') {
+          setReady(true);
+          inject(`window.wafflrSetCount && window.wafflrSetCount(${count})`);
+        } else if (data.type === 'rolling') {
+          setRolling(true);
+          setPopupOpen(false);
+          setTotal(null);
+        } else if (data.type === 'result') {
+          setRolling(false);
+          setTotal(data.total ?? 0);
+          setDetails(data.details ?? []);
+          setPopupOpen(true);
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
-  }, [count, inject]);
+    },
+    [count, inject],
+  );
 
   const changeCount = (n: DiceCount) => {
     if (rolling) return;
     setCount(n);
     setTotal(null);
     setDetails([]);
+    setPopupOpen(false);
     inject(`window.wafflrSetCount && window.wafflrSetCount(${n})`);
   };
 
@@ -91,7 +93,13 @@ export function DiceRoller(_props: Props) {
     btnScale.value = withSpring(0.94, SPRINGS.stiff, () => {
       btnScale.value = withSpring(1, SPRINGS.bouncy);
     });
+    setPopupOpen(false);
     inject('window.wafflrRoll && window.wafflrRoll()');
+  };
+
+  const rollAgain = () => {
+    setPopupOpen(false);
+    void roll();
   };
 
   return (
@@ -108,12 +116,10 @@ export function DiceRoller(_props: Props) {
           overScrollMode="never"
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
-          // Android: allow CDN modules
           mixedContentMode="always"
           javaScriptEnabled
           domStorageEnabled
           setSupportMultipleWindows={false}
-          // Transparent until paint
           containerStyle={styles.webContainer}
         />
         {!ready ? (
@@ -126,17 +132,8 @@ export function DiceRoller(_props: Props) {
       <View style={styles.scoreBlock}>
         {rolling ? (
           <Text style={styles.scorePlaceholder}>Rolling…</Text>
-        ) : total != null ? (
-          <>
-            <Text style={styles.scoreTotal}>{total}</Text>
-            {details.length > 1 ? (
-              <Text style={styles.scoreDetail}>
-                ({details.join(' + ')})
-              </Text>
-            ) : details.length === 1 ? (
-              <Text style={styles.scoreDetail}>Rolled {details[0]}</Text>
-            ) : null}
-          </>
+        ) : total != null && !popupOpen ? (
+          <Text style={styles.scoreHint}>Last total · {total}</Text>
         ) : (
           <Text style={styles.scorePlaceholder}>Ready</Text>
         )}
@@ -179,6 +176,14 @@ export function DiceRoller(_props: Props) {
         })}
       </View>
       <Text style={styles.pillHint}>Dice count</Text>
+
+      <DiceResultPopup
+        visible={popupOpen && total != null}
+        total={total ?? 0}
+        details={details}
+        onClose={() => setPopupOpen(false)}
+        onRollAgain={rollAgain}
+      />
     </View>
   );
 }
@@ -218,23 +223,18 @@ const styles = StyleSheet.create({
     color: neu.muted,
   },
   scoreBlock: {
-    minHeight: 56,
+    minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing[3],
+    marginTop: spacing[2],
   },
-  scoreTotal: {
-    fontSize: 40,
-    fontWeight: '900',
-    color: colors.brand.pink[600],
-  },
-  scoreDetail: {
+  scoreHint: {
     fontSize: 14,
     fontWeight: '700',
-    color: neu.muted,
+    color: colors.brand.pink[600],
   },
   scorePlaceholder: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: neu.muted,
   },
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
-    marginTop: spacing[2],
+    marginTop: spacing[1],
   },
   rollBtnText: {
     color: colors.brand.white,
