@@ -29,12 +29,12 @@ import { useSessionLists } from '../../src/session/SessionListsContext';
 import { WafflrMark } from '../../src/components/brand';
 import { WafflrWordmark } from '../../src/components/brand';
 import { colors } from '../../src/theme/colors';
+import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
+import { SPRINGS } from '../../src/constants/springs';
 
 const SWIPE_THRESHOLD = 56;
 const SCREEN_W = Dimensions.get('window').width;
-/** Match native stack transition (~system push duration) */
-const EXIT_MS = 320;
 
 type CardId = 'dice' | 'wheel' | 'room' | 'bracket';
 type Dir = 'left' | 'right';
@@ -100,8 +100,8 @@ function BounceArrow({
   useEffect(() => {
     bob.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 550, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 550, easing: Easing.inOut(Easing.sin) }),
+        withSpring(1, SPRINGS.gentle),
+        withSpring(0, SPRINGS.gentle),
       ),
       -1,
       false,
@@ -138,17 +138,16 @@ function SwipeGameCard({
 }) {
   const x = useSharedValue(0);
   const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
 
   const exit = () => {
     const target = config.dir === 'left' ? -SCREEN_W : SCREEN_W;
-    x.value = withTiming(
-      target,
-      { duration: EXIT_MS, easing: Easing.out(Easing.cubic) },
-      (finished) => {
-        if (finished) runOnJS(onActivate)();
-      },
-    );
-    opacity.value = withTiming(0.25, { duration: EXIT_MS });
+    // Spring fling off-screen — candy pop feel
+    x.value = withSpring(target, SPRINGS.exit, (finished) => {
+      if (finished) runOnJS(onActivate)();
+    });
+    opacity.value = withTiming(0.2, { duration: 280 });
+    scale.value = withSpring(0.92, SPRINGS.snappy);
   };
 
   const pan = Gesture.Pan()
@@ -161,6 +160,8 @@ function SwipeGameCard({
       } else {
         x.value = Math.max(0, Math.min(SCREEN_W * 0.5, e.translationX));
       }
+      const progress = Math.min(1, Math.abs(x.value) / (SCREEN_W * 0.4));
+      scale.value = 1 - progress * 0.04;
     })
     .onEnd((e) => {
       const crossed =
@@ -170,22 +171,23 @@ function SwipeGameCard({
       if (crossed) {
         runOnJS(exit)();
       } else {
-        x.value = withSpring(0, { damping: 16, stiffness: 240 });
+        x.value = withSpring(0, SPRINGS.snappy);
+        scale.value = withSpring(1, SPRINGS.bouncy);
       }
     });
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: x.value }],
+    transform: [{ translateX: x.value }, { scale: scale.value }],
     opacity: opacity.value,
   }));
 
-  // Reset when returning to home
   useEffect(() => {
     if (!disabled) {
       x.value = 0;
       opacity.value = 1;
+      scale.value = 1;
     }
-  }, [disabled, opacity, x]);
+  }, [disabled, opacity, scale, x]);
 
   return (
     <GestureDetector gesture={pan}>
@@ -196,17 +198,13 @@ function SwipeGameCard({
           style={({ pressed }) => [
             styles.gameCard,
             {
-              backgroundColor: colors.brand.white,
               borderColor: config.accent,
               opacity: pressed ? 0.94 : 1,
             },
           ]}
         >
           <View
-            style={[
-              styles.cardGlow,
-              { backgroundColor: config.accentSoft },
-            ]}
+            style={[styles.cardGlow, { backgroundColor: config.accentSoft }]}
           />
           <Text style={styles.gameEmoji}>{config.emoji}</Text>
           <Text style={styles.gameTitle}>{config.title}</Text>
@@ -217,7 +215,9 @@ function SwipeGameCard({
           <View
             style={[
               styles.cardArrow,
-              config.dir === 'left' ? styles.cardArrowLeft : styles.cardArrowRight,
+              config.dir === 'left'
+                ? styles.cardArrowLeft
+                : styles.cardArrowRight,
             ]}
             pointerEvents="none"
           >
@@ -236,16 +236,16 @@ function AnimatedHero() {
   useEffect(() => {
     bounce.value = withRepeat(
       withSequence(
-        withSpring(1, { damping: 6, stiffness: 120 }),
-        withSpring(0, { damping: 8, stiffness: 100 }),
+        withSpring(1, SPRINGS.bouncy),
+        withSpring(0, SPRINGS.gentle),
       ),
       -1,
       false,
     );
     sparkle.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 900 }),
-        withTiming(0, { duration: 900 }),
+        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 900, easing: Easing.inOut(Easing.sin) }),
       ),
       -1,
       false,
@@ -260,8 +260,8 @@ function AnimatedHero() {
   }));
 
   const tagStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sparkle.value, [0, 1], [0.7, 1]),
-    transform: [{ scale: interpolate(sparkle.value, [0, 1], [0.98, 1.02]) }],
+    opacity: interpolate(sparkle.value, [0, 1], [0.75, 1]),
+    transform: [{ scale: interpolate(sparkle.value, [0, 1], [0.98, 1.03]) }],
   }));
 
   return (
@@ -401,7 +401,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF8EB', // warm candy cream
+    backgroundColor: neu.canvas,
     paddingHorizontal: spacing[4],
   },
   hero: {
@@ -415,10 +415,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
     borderRadius: radius.full,
-    backgroundColor: colors.brand.white,
-    // neumorphic soft raise
-    shadowColor: colors.brand.amber[700],
-    shadowOpacity: 0.12,
+    backgroundColor: neu.card,
+    shadowColor: neu.shadow.color,
+    shadowOpacity: neu.shadow.opacity,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
@@ -438,7 +437,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13,
     fontWeight: '700',
-    color: colors.brand.slate[500],
+    color: neu.muted,
   },
   grid: {
     flexDirection: 'row',
@@ -458,8 +457,8 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     gap: 2,
     overflow: 'hidden',
-    // shiny neumorph
-    shadowColor: '#78350F',
+    backgroundColor: neu.card,
+    shadowColor: neu.shadow.color,
     shadowOpacity: 0.14,
     shadowRadius: 12,
     shadowOffset: { width: 4, height: 6 },
@@ -480,7 +479,7 @@ const styles = StyleSheet.create({
   gameTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.brand.slate[900],
+    color: neu.text,
   },
   gameSub: {
     fontSize: 11,
@@ -502,7 +501,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    backgroundColor: colors.brand.white,
+    backgroundColor: neu.card,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
