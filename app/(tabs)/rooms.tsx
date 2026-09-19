@@ -4,7 +4,6 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  useColorScheme,
   FlatList,
   Modal,
   TextInput,
@@ -15,6 +14,11 @@ import {
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { useRoom } from '../../src/room/RoomContext';
 import {
@@ -22,17 +26,52 @@ import {
   type SessionEntry,
 } from '../../src/session/SessionListsContext';
 import { colors } from '../../src/theme/colors';
+import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
 import { normalizeRoomCode } from '../../src/utils/room-code';
+import { SPRINGS } from '../../src/constants/springs';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function RoomRow({
+  item,
+  onOpen,
+  onLeave,
+}: {
+  item: SessionEntry;
+  onOpen: () => void;
+  onLeave: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <AnimatedPressable
+      onPressIn={() => {
+        scale.value = withSpring(0.97, SPRINGS.stiff);
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, SPRINGS.snappy);
+      }}
+      onPress={onOpen}
+      style={[styles.row, style]}
+    >
+      <View style={styles.rowLeft}>
+        <Text style={styles.rowCode}>{item.code}</Text>
+        <Text style={styles.rowMeta}>
+          {item.role === 'host' ? 'Host' : 'Guest'} · open until host closes
+        </Text>
+      </View>
+      <Pressable onPress={onLeave} hitSlop={12} style={styles.leaveBtn}>
+        <Text style={styles.leaveText}>Leave</Text>
+      </Pressable>
+    </AnimatedPressable>
+  );
+}
 
 export default function RoomsScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const bg = isDark ? colors.canvas.dark : colors.canvas.light;
-  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
-  const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
-  const cardBg = isDark ? colors.elevated.dark : colors.elevated.light;
-
   const { create, join, isLoading } = useRoom();
   const { rooms, upsertRoom, removeRoom } = useSessionLists();
 
@@ -80,39 +119,11 @@ export default function RoomsScreen() {
     router.push(`/room/${result.code}`);
   };
 
-  const renderItem = ({ item }: { item: SessionEntry }) => (
-    <Pressable
-      onPress={() => router.push(`/room/${item.code}`)}
-      style={({ pressed }) => [
-        styles.row,
-        { backgroundColor: cardBg, opacity: pressed ? 0.9 : 1 },
-      ]}
-    >
-      <View style={styles.rowLeft}>
-        <Text style={[styles.rowCode, { color: colors.brand.amber[500] }]}>
-          {item.code}
-        </Text>
-        <Text style={[styles.rowMeta, { color: muted }]}>
-          {item.role === 'host' ? 'Host' : 'Guest'} · open until host closes
-        </Text>
-      </View>
-      <Pressable
-        onPress={() => removeRoom(item.code)}
-        hitSlop={12}
-        style={styles.leaveBtn}
-      >
-        <Text style={{ color: colors.brand.red[500], fontWeight: '700', fontSize: 13 }}>
-          Leave
-        </Text>
-      </Pressable>
-    </Pressable>
-  );
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: text }]}>Rooms</Text>
-        <Text style={[styles.subtitle, { color: muted }]}>
+        <Text style={styles.title}>Rooms</Text>
+        <Text style={styles.subtitle}>
           Rooms you host or joined. They stay open until the host closes them.
         </Text>
       </View>
@@ -122,8 +133,8 @@ export default function RoomsScreen() {
           onPress={onCreate}
           disabled={busy}
           style={({ pressed }) => [
-            styles.toolBtn,
-            { backgroundColor: colors.brand.amber[500], opacity: pressed || busy ? 0.85 : 1 },
+            styles.toolBtnPrimary,
+            { opacity: pressed || busy ? 0.88 : 1 },
           ]}
         >
           {busy && !joinOpen ? (
@@ -139,25 +150,27 @@ export default function RoomsScreen() {
             setJoinOpen(true);
           }}
           style={({ pressed }) => [
-            styles.toolBtn,
             styles.toolBtnOutline,
-            {
-              borderColor: isDark ? colors.border.dark : colors.border.light,
-              opacity: pressed ? 0.85 : 1,
-            },
+            { opacity: pressed ? 0.88 : 1 },
           ]}
         >
-          <Text style={[styles.toolBtnOutlineText, { color: text }]}>Join code</Text>
+          <Text style={styles.toolBtnOutlineText}>Join code</Text>
         </Pressable>
       </View>
 
       <FlatList
         data={rooms}
         keyExtractor={(item) => item.code}
-        renderItem={renderItem}
+        renderItem={({ item }) => (
+          <RoomRow
+            item={item}
+            onOpen={() => router.push(`/room/${item.code}`)}
+            onLeave={() => removeRoom(item.code)}
+          />
+        )}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={[styles.empty, { color: muted }]}>
+          <Text style={styles.empty}>
             No rooms yet. Create one or join with a code.
           </Text>
         }
@@ -173,32 +186,20 @@ export default function RoomsScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: isDark ? colors.brand.slate[800] : colors.brand.slate[50] },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: text }]}>Join room</Text>
-            <Text style={[styles.modalHint, { color: muted }]}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Join room</Text>
+            <Text style={styles.modalHint}>
               Enter the 6-character code from your host
             </Text>
             <TextInput
               value={joinCode}
               onChangeText={(t) => setJoinCode(normalizeRoomCode(t))}
               placeholder="WAFFLR"
-              placeholderTextColor={muted}
+              placeholderTextColor={neu.muted}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={6}
-              style={[
-                styles.codeInput,
-                {
-                  color: text,
-                  borderColor: isDark ? colors.border.dark : colors.border.light,
-                  backgroundColor: isDark ? colors.brand.slate[900] : '#fff',
-                },
-              ]}
+              style={styles.codeInput}
               onSubmitEditing={onSubmitJoin}
               returnKeyType="go"
             />
@@ -210,7 +211,6 @@ export default function RoomsScreen() {
                 styles.primaryBtn,
                 {
                   opacity: busy || joinCode.length < 6 ? 0.5 : pressed ? 0.9 : 1,
-                  marginTop: spacing[4],
                 },
               ]}
             >
@@ -221,7 +221,7 @@ export default function RoomsScreen() {
               )}
             </Pressable>
             <Pressable onPress={() => setJoinOpen(false)} style={styles.cancel}>
-              <Text style={{ color: muted }}>Cancel</Text>
+              <Text style={{ color: neu.muted, fontWeight: '600' }}>Cancel</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -231,66 +231,113 @@ export default function RoomsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: neu.canvas },
   header: {
     paddingHorizontal: spacing[6],
     paddingTop: spacing[4],
     paddingBottom: spacing[3],
     gap: spacing[1],
   },
-  title: { fontSize: 28, fontWeight: '800' },
-  subtitle: { fontSize: 14, lineHeight: 20 },
+  title: { fontSize: 28, fontWeight: '800', color: neu.text },
+  subtitle: { fontSize: 14, lineHeight: 20, color: neu.muted },
   toolbar: {
     flexDirection: 'row',
     gap: spacing[3],
     paddingHorizontal: spacing[6],
     marginBottom: spacing[3],
   },
-  toolBtn: {
+  toolBtnPrimary: {
     flex: 1,
     minHeight: 48,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.brand.amber[500],
+    shadowColor: neu.shadow.color,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   toolBtnPrimaryText: {
     color: colors.brand.slate[900],
     fontWeight: '800',
     fontSize: 16,
   },
-  toolBtnOutline: { borderWidth: 1.5 },
-  toolBtnOutlineText: { fontWeight: '700', fontSize: 16 },
+  toolBtnOutline: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: radius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: neu.card,
+    borderWidth: 1.5,
+    borderColor: neu.borderSoft,
+    shadowColor: neu.shadowSoft.color,
+    shadowOpacity: neu.shadowSoft.opacity,
+    shadowRadius: neu.shadowSoft.radius,
+    shadowOffset: neu.shadowSoft.offset,
+    elevation: neu.shadowSoft.elevation,
+  },
+  toolBtnOutlineText: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: neu.text,
+  },
   list: {
     paddingHorizontal: spacing[6],
     paddingBottom: spacing[8],
-    gap: spacing[2],
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing[4],
-    borderRadius: radius.lg,
-    marginBottom: spacing[2],
+    borderRadius: radius.xl,
+    marginBottom: spacing[3],
+    backgroundColor: neu.card,
+    borderWidth: 1.5,
+    borderColor: neu.borderSoft,
+    shadowColor: neu.shadow.color,
+    shadowOpacity: neu.shadow.opacity,
+    shadowRadius: neu.shadow.radius,
+    shadowOffset: neu.shadow.offset,
+    elevation: neu.shadow.elevation,
   },
   rowLeft: { flex: 1, gap: 2 },
-  rowCode: { fontSize: 18, fontWeight: '800', letterSpacing: 2 },
-  rowMeta: { fontSize: 12 },
+  rowCode: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 2,
+    color: colors.brand.amber[600],
+  },
+  rowMeta: { fontSize: 12, color: neu.muted },
   leaveBtn: { paddingLeft: spacing[3] },
-  empty: { textAlign: 'center', marginTop: spacing[10], fontSize: 15 },
+  leaveText: {
+    color: colors.brand.red[500],
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  empty: {
+    textAlign: 'center',
+    marginTop: spacing[10],
+    fontSize: 15,
+    color: neu.muted,
+  },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(120, 53, 15, 0.25)',
   },
   modalCard: {
     borderTopLeftRadius: radius['2xl'],
     borderTopRightRadius: radius['2xl'],
     padding: spacing[6],
     paddingBottom: spacing[10],
+    backgroundColor: neu.canvasAlt,
   },
-  modalTitle: { fontSize: 22, fontWeight: '700' },
-  modalHint: { marginTop: spacing[1], fontSize: 15 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: neu.text },
+  modalHint: { marginTop: spacing[1], fontSize: 15, color: neu.muted },
   codeInput: {
     marginTop: spacing[4],
     borderWidth: 1.5,
@@ -301,6 +348,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 6,
     textAlign: 'center',
+    color: neu.text,
+    backgroundColor: neu.card,
+    borderColor: neu.borderSoft,
   },
   errorText: {
     marginTop: spacing[2],
@@ -309,6 +359,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   primaryBtn: {
+    marginTop: spacing[4],
     backgroundColor: colors.brand.amber[500],
     paddingVertical: spacing[4],
     borderRadius: radius.xl,
@@ -317,7 +368,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: colors.brand.slate[900],
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   cancel: { alignItems: 'center', paddingVertical: spacing[3] },
 });

@@ -5,30 +5,38 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  useColorScheme,
   ScrollView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { colors } from '../../src/theme/colors';
+import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
+import { SPRINGS } from '../../src/constants/springs';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function SettingsScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const bg = isDark ? colors.canvas.dark : colors.canvas.light;
-  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
-  const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
-  const cardBg = isDark ? colors.elevated.dark : colors.elevated.light;
-  const inputBg = isDark ? colors.brand.slate[900] : colors.brand.white;
-
   const [handle, setHandle] = useState('You');
   const [email, setEmail] = useState('');
   const [avatarEmoji, setAvatarEmoji] = useState('🧇');
   const [savedHint, setSavedHint] = useState<string | null>(null);
 
+  const saveScale = useSharedValue(1);
+  const saveStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: saveScale.value }],
+  }));
+
   const onSave = async () => {
+    saveScale.value = withSpring(0.96, SPRINGS.stiff, () => {
+      saveScale.value = withSpring(1, SPRINGS.bouncy);
+    });
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
@@ -52,18 +60,18 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.title, { color: text }]}>Settings</Text>
-        <Text style={[styles.subtitle, { color: muted }]}>
+        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.subtitle}>
           Optional profile. Guests can still play without an account.
         </Text>
 
-        <View style={[styles.card, { backgroundColor: cardBg }]}>
-          <Text style={[styles.label, { color: muted }]}>Avatar</Text>
+        <View style={styles.card}>
+          <Text style={styles.label}>Avatar</Text>
           <View style={styles.avatarRow}>
             {['🧇', '🎲', '🎯', '🍿', '🍕', '🎬'].map((e) => (
               <Pressable
@@ -71,18 +79,7 @@ export default function SettingsScreen() {
                 onPress={() => setAvatarEmoji(e)}
                 style={[
                   styles.avatarChip,
-                  {
-                    borderColor:
-                      avatarEmoji === e
-                        ? colors.brand.amber[500]
-                        : isDark
-                          ? colors.border.dark
-                          : colors.border.light,
-                    backgroundColor:
-                      avatarEmoji === e
-                        ? colors.brand.amber[500] + '22'
-                        : 'transparent',
-                  },
+                  avatarEmoji === e && styles.avatarChipActive,
                 ]}
               >
                 <Text style={styles.avatarEmoji}>{e}</Text>
@@ -90,58 +87,37 @@ export default function SettingsScreen() {
             ))}
           </View>
 
-          <Text style={[styles.label, { color: muted, marginTop: spacing[4] }]}>
-            Handle
-          </Text>
+          <Text style={[styles.label, { marginTop: spacing[4] }]}>Handle</Text>
           <TextInput
             value={handle}
             onChangeText={setHandle}
             placeholder="Display name"
-            placeholderTextColor={muted}
-            style={[
-              styles.input,
-              {
-                color: text,
-                backgroundColor: inputBg,
-                borderColor: isDark ? colors.border.dark : colors.border.light,
-              },
-            ]}
+            placeholderTextColor={neu.muted}
+            style={styles.input}
           />
 
-          <Text style={[styles.label, { color: muted, marginTop: spacing[4] }]}>
+          <Text style={[styles.label, { marginTop: spacing[4] }]}>
             Login email
           </Text>
           <TextInput
             value={email}
             onChangeText={setEmail}
             placeholder="optional@email.com"
-            placeholderTextColor={muted}
+            placeholderTextColor={neu.muted}
             autoCapitalize="none"
             keyboardType="email-address"
-            style={[
-              styles.input,
-              {
-                color: text,
-                backgroundColor: inputBg,
-                borderColor: isDark ? colors.border.dark : colors.border.light,
-              },
-            ]}
+            style={styles.input}
           />
 
-          <Pressable
+          <AnimatedPressable
             onPress={onSave}
-            style={({ pressed }) => [
-              styles.saveBtn,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
+            style={[styles.saveBtn, saveStyle]}
           >
             <Text style={styles.saveBtnText}>Save profile</Text>
-          </Pressable>
+          </AnimatedPressable>
 
           {savedHint ? (
-            <Text style={[styles.hint, { color: colors.brand.emerald[500] }]}>
-              {savedHint}
-            </Text>
+            <Text style={styles.hint}>{savedHint}</Text>
           ) : null}
         </View>
 
@@ -149,10 +125,7 @@ export default function SettingsScreen() {
           onPress={onLogout}
           style={({ pressed }) => [
             styles.logoutBtn,
-            {
-              borderColor: colors.brand.red[500],
-              opacity: pressed ? 0.85 : 1,
-            },
+            { opacity: pressed ? 0.85 : 1 },
           ]}
         >
           <Text style={styles.logoutText}>Log out</Text>
@@ -163,22 +136,31 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: neu.canvas },
   scroll: {
     paddingHorizontal: spacing[6],
     paddingTop: spacing[4],
     paddingBottom: spacing[12],
   },
-  title: { fontSize: 28, fontWeight: '800' },
+  title: { fontSize: 28, fontWeight: '800', color: neu.text },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
     marginTop: spacing[1],
     marginBottom: spacing[5],
+    color: neu.muted,
   },
   card: {
     borderRadius: radius['2xl'],
     padding: spacing[5],
+    backgroundColor: neu.card,
+    borderWidth: 1.5,
+    borderColor: neu.borderSoft,
+    shadowColor: neu.shadow.color,
+    shadowOpacity: neu.shadow.opacity,
+    shadowRadius: neu.shadow.radius,
+    shadowOffset: neu.shadow.offset,
+    elevation: neu.shadow.elevation,
   },
   label: {
     fontSize: 12,
@@ -186,6 +168,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: spacing[2],
+    color: neu.muted,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -197,8 +180,14 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: radius.lg,
     borderWidth: 2,
+    borderColor: neu.borderSoft,
+    backgroundColor: neu.cardInset,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarChipActive: {
+    borderColor: colors.brand.amber[500],
+    backgroundColor: colors.brand.amber[100],
   },
   avatarEmoji: { fontSize: 22 },
   input: {
@@ -208,6 +197,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     fontSize: 16,
     fontWeight: '600',
+    color: neu.text,
+    backgroundColor: neu.cardInset,
+    borderColor: neu.borderSoft,
   },
   saveBtn: {
     marginTop: spacing[5],
@@ -216,6 +208,11 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.brand.amber[800],
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   saveBtnText: {
     color: colors.brand.slate[900],
@@ -225,8 +222,9 @@ const styles = StyleSheet.create({
   hint: {
     marginTop: spacing[3],
     textAlign: 'center',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 13,
+    color: colors.brand.emerald[600],
   },
   logoutBtn: {
     marginTop: spacing[6],
@@ -235,6 +233,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: neu.card,
+    borderColor: colors.brand.red[500],
   },
   logoutText: {
     color: colors.brand.red[500],
