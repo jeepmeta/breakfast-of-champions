@@ -4,29 +4,23 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  useColorScheme,
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { InstantDice } from '../../src/components/dice/InstantDice';
+import { DiceRoller } from '../../src/components/dice/DiceRoller';
 import { useRoom } from '../../src/room/RoomContext';
 import { useSessionLists } from '../../src/session/SessionListsContext';
 import { colors } from '../../src/theme/colors';
+import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
 
 /**
- * Solo dice hub — instant roll now; open a dice room for multiplayer / variants.
+ * Solo dice hub — 3D tumble roll (1–3 dice) + optional multiplayer room.
  */
 export default function PlayDiceScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const bg = isDark ? colors.canvas.dark : colors.canvas.light;
-  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
-  const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
-
   const { create, isLoading } = useRoom();
   const { upsertRoom } = useSessionLists();
   const [busy, setBusy] = useState(false);
@@ -42,7 +36,6 @@ export default function PlayDiceScreen() {
     try {
       const { code } = await create({ displayName: 'You' });
       upsertRoom({ code, title: `Dice ${code}`, role: 'host' });
-      // Room lobby will host dice mode selection next.
       router.replace(`/room/${code}`);
     } catch {
       // stay
@@ -52,20 +45,19 @@ export default function PlayDiceScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.top}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={{ color: muted, fontWeight: '700' }}>← Back</Text>
+          <Text style={styles.back}>← Back</Text>
         </Pressable>
-        <Text style={[styles.title, { color: text }]}>Dice</Text>
-        <Text style={[styles.sub, { color: muted }]}>
-          Instant roll for quick ties. Open a room to invite friends and unlock more
-          variations.
+        <Text style={styles.title}>Dice</Text>
+        <Text style={styles.sub}>
+          Slow, natural tumble — like dice on the table. Pick 1–3, then ROLL.
         </Text>
       </View>
 
       <View style={styles.center}>
-        <InstantDice size={160} />
+        <DiceRoller dieSize={112} />
       </View>
 
       <View style={styles.footer}>
@@ -83,8 +75,8 @@ export default function PlayDiceScreen() {
             <Text style={styles.roomBtnText}>Open dice room · invite friends</Text>
           )}
         </Pressable>
-        <Text style={[styles.footnote, { color: muted }]}>
-          Coming in-room: multi-die, high/low, roll-offs, and custom sides.
+        <Text style={styles.footnote}>
+          In-room later: high/low, roll-offs, and custom sides.
         </Text>
       </View>
     </SafeAreaView>
@@ -94,46 +86,54 @@ export default function PlayDiceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: neu.canvas,
     paddingHorizontal: spacing[6],
-    justifyContent: 'space-between',
-    paddingBottom: spacing[6],
+    paddingBottom: spacing[5],
   },
   top: {
     paddingTop: spacing[2],
-    gap: spacing[2],
+    gap: spacing[1],
+  },
+  back: {
+    color: neu.muted,
+    fontWeight: '700',
   },
   title: {
     fontSize: 28,
     fontWeight: '800',
+    color: neu.text,
   },
   sub: {
     fontSize: 15,
     lineHeight: 22,
+    color: neu.muted,
   },
   center: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minHeight: 280,
   },
   footer: {
-    gap: spacing[3],
+    gap: spacing[2],
   },
   roomBtn: {
-    backgroundColor: colors.brand.pink[500],
-    minHeight: 54,
+    backgroundColor: colors.brand.amber[400],
+    minHeight: 50,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing[4],
+    borderWidth: 1.5,
+    borderColor: colors.brand.amber[500],
   },
   roomBtnText: {
-    color: colors.brand.white,
-    fontSize: 16,
+    color: colors.brand.slate[900],
+    fontSize: 15,
     fontWeight: '800',
   },
   footnote: {
     textAlign: 'center',
     fontSize: 12,
     lineHeight: 18,
+    color: neu.muted,
   },
 });
