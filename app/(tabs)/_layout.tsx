@@ -1,10 +1,11 @@
 import { Tabs } from 'expo-router';
-import { Text, useColorScheme } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 
 import { colors } from '../../src/theme/colors';
 
-type TabIcon = React.ComponentProps<typeof Ionicons>['name'];
+type IconName = ComponentProps<typeof Ionicons>['name'];
 
 function TabBarIcon({
   name,
@@ -12,8 +13,8 @@ function TabBarIcon({
   color,
   focused,
 }: {
-  name: TabIcon;
-  focusedName: TabIcon;
+  name: IconName;
+  focusedName: IconName;
   color: string;
   focused: boolean;
 }) {
