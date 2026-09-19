@@ -34,6 +34,12 @@ type Props = {
   hideSpinButton?: boolean;
   externalSpin?: ExternalSpin | null;
   hideResult?: boolean;
+  /** Continuous tick haptics while spinning. Default true (group wheel). Solo basic = false. */
+  tickHaptics?: boolean;
+  /** Haptic when spin starts. Default true. */
+  spinStartHaptic?: boolean;
+  /** Haptic when spin settles. Default true. */
+  settleHaptic?: boolean;
 };
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
@@ -69,6 +75,9 @@ export function WafflrWheel({
   hideSpinButton = false,
   externalSpin = null,
   hideResult = false,
+  tickHaptics = true,
+  spinStartHaptic = true,
+  settleHaptic = true,
 }: Props) {
   const rotation = useSharedValue(0);
   const velocity = useSharedValue(0);
@@ -80,6 +89,10 @@ export function WafflrWheel({
   const segmentsRef = useRef(segments);
   segmentsRef.current = segments;
   const lastNonceRef = useRef<number | null>(null);
+  const tickHapticsRef = useRef(tickHaptics);
+  tickHapticsRef.current = tickHaptics;
+  const settleHapticRef = useRef(settleHaptic);
+  settleHapticRef.current = settleHaptic;
 
   const totalWeight = useMemo(
     () => segments.reduce((sum, s) => sum + (s.weight ?? 1), 0) || 1,
@@ -131,10 +144,14 @@ export function WafflrWheel({
       const idx = resolveWinner(finalRot);
       setWinnerIndex(idx);
       setIsSpinning(false);
-      try {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {
-        // ignore
+      if (settleHapticRef.current) {
+        try {
+          void Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Success,
+          );
+        } catch {
+          // ignore
+        }
       }
       onSpinEnd?.(segmentsRef.current[idx], idx);
     },
@@ -142,6 +159,7 @@ export function WafflrWheel({
   );
 
   const tickHaptic = useCallback(() => {
+    if (!tickHapticsRef.current) return;
     try {
       void Haptics.selectionAsync();
     } catch {
@@ -150,7 +168,7 @@ export function WafflrWheel({
   }, []);
 
   const beginSpin = useCallback(
-    (vel: number, startRot: number) => {
+    (vel: number, startRot: number, withStartHaptic: boolean) => {
       setWinnerIndex(null);
       setIsSpinning(true);
       rotation.value = startRot;
@@ -158,10 +176,12 @@ export function WafflrWheel({
       lastTickAngle.value = startRot;
       didFinish.value = false;
       spinning.value = true;
-      try {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      } catch {
-        // ignore
+      if (withStartHaptic) {
+        try {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch {
+          // ignore
+        }
       }
     },
     [didFinish, lastTickAngle, rotation, spinning, velocity],
@@ -171,8 +191,8 @@ export function WafflrWheel({
     if (!externalSpin) return;
     if (lastNonceRef.current === externalSpin.nonce) return;
     lastNonceRef.current = externalSpin.nonce;
-    beginSpin(externalSpin.velocity, externalSpin.startRotation);
-  }, [externalSpin, beginSpin]);
+    beginSpin(externalSpin.velocity, externalSpin.startRotation, spinStartHaptic);
+  }, [externalSpin, beginSpin, spinStartHaptic]);
 
   useFrameCallback(() => {
     'worklet';
@@ -200,18 +220,13 @@ export function WafflrWheel({
 
   const spin = useCallback(() => {
     if (spinning.value || isSpinning) return;
-    const { initial_velocity_range, full_rotations_before_decel } =
-      WHEEL_PHYSICS;
+    const { initial_velocity_range } = WHEEL_PHYSICS;
     const v =
       initial_velocity_range.min +
       Math.random() *
         (initial_velocity_range.max - initial_velocity_range.min);
-    const extraTurns =
-      full_rotations_before_decel.min +
-      Math.random() *
-        (full_rotations_before_decel.max - full_rotations_before_decel.min);
-    beginSpin(v, rotation.value + extraTurns * 360 * 0.02);
-  }, [beginSpin, isSpinning, rotation, spinning]);
+    beginSpin(v, rotation.value, spinStartHaptic);
+  }, [beginSpin, isSpinning, rotation, spinning, spinStartHaptic]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
