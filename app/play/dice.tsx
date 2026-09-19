@@ -18,7 +18,7 @@ import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
 
 /**
- * Solo dice hub — 3D tumble roll (1–3 dice) + optional multiplayer room.
+ * Solo dice hub — real 3D physics table (Three + Cannon) + multiplayer room.
  */
 export default function PlayDiceScreen() {
   const { create, isLoading } = useRoom();
@@ -52,12 +52,12 @@ export default function PlayDiceScreen() {
         </Pressable>
         <Text style={styles.title}>Dice</Text>
         <Text style={styles.sub}>
-          Slow, natural tumble — like dice on the table. Pick 1–3, then ROLL.
+          Real physics tumble — gravity, bounce, and settle. Pick 1–5, then ROLL.
         </Text>
       </View>
 
       <View style={styles.center}>
-        <DiceRoller dieSize={112} />
+        <DiceRoller />
       </View>
 
       <View style={styles.footer}>
@@ -76,7 +76,7 @@ export default function PlayDiceScreen() {
           )}
         </Pressable>
         <Text style={styles.footnote}>
-          In-room later: high/low, roll-offs, and custom sides.
+          Physics adapted from the Mant0u 3D dice pen — Wafflr brand + ROLL control.
         </Text>
       </View>
     </SafeAreaView>
@@ -87,8 +87,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: neu.canvas,
-    paddingHorizontal: spacing[6],
-    paddingBottom: spacing[5],
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[4],
   },
   top: {
     paddingTop: spacing[2],
@@ -110,10 +110,12 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    minHeight: 280,
+    minHeight: 320,
+    marginTop: spacing[2],
   },
   footer: {
     gap: spacing[2],
+    paddingTop: spacing[2],
   },
   roomBtn: {
     backgroundColor: colors.brand.amber[400],
@@ -132,8 +134,8 @@ const styles = StyleSheet.create({
   },
   footnote: {
     textAlign: 'center',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
     color: neu.muted,
   },
 });
