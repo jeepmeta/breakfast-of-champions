@@ -23,7 +23,7 @@ export function WafflrWordmark({
         {
           fontSize: size,
           color,
-          fontFamily: fonts.display,
+          fontFamily: fonts.fredoka.bold,
         },
         style,
       ]}
