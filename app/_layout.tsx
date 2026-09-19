@@ -53,6 +53,14 @@ export default function RootLayout() {
           >
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
+              name="play/dice"
+              options={{ animation: 'slide_from_left' }}
+            />
+            <Stack.Screen
+              name="play/wheel"
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
               name="room/[code]"
               options={{ animation: 'slide_from_right' }}
             />

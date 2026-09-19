@@ -10,23 +10,63 @@ import {
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
 
 import { useRoom } from '../../src/room/RoomContext';
 import { useSessionLists } from '../../src/session/SessionListsContext';
 import { WafflrLockup } from '../../src/components/brand';
-import { InstantDice } from '../../src/components/dice/InstantDice';
 import { colors } from '../../src/theme/colors';
 import { spacing, radius } from '../../src/theme/tokens';
+
+const SWIPE_THRESHOLD = 48;
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const bg = isDark ? colors.canvas.dark : colors.canvas.light;
+  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
   const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
+  const cardBg = isDark ? colors.elevated.dark : colors.elevated.light;
 
   const { create, isLoading } = useRoom();
   const { upsertRoom, upsertBracket } = useSessionLists();
   const [busy, setBusy] = useState<'room' | 'bracket' | null>(null);
+
+  const translateX = useSharedValue(0);
+
+  const openDice = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+    router.push('/play/dice');
+  };
+
+  const openWheel = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+    router.push('/play/wheel');
+  };
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .onUpdate((e) => {
+      translateX.value = Math.max(-80, Math.min(80, e.translationX));
+    })
+    .onEnd((e) => {
+      if (e.translationX <= -SWIPE_THRESHOLD) {
+        runOnJS(openDice)();
+      } else if (e.translationX >= SWIPE_THRESHOLD) {
+        runOnJS(openWheel)();
+      }
+      translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
+    });
+
+  const swipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
 
   const onCreateRoom = async () => {
     if (busy || isLoading) return;
@@ -41,7 +81,7 @@ export default function HomeScreen() {
       upsertRoom({ code, title: `Room ${code}`, role: 'host' });
       router.push(`/room/${code}`);
     } catch {
-      // stay on home; Rooms tab can surface join errors
+      // stay on home
     } finally {
       setBusy(null);
     }
@@ -56,7 +96,6 @@ export default function HomeScreen() {
       // ignore
     }
     try {
-      // Brackets reuse room infrastructure for now; mode selected in-session.
       const { code } = await create({ displayName: 'You' });
       upsertBracket({ code, title: `Bracket ${code}`, role: 'host' });
       router.push(`/room/${code}`);
@@ -71,16 +110,54 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
       <View style={styles.header}>
         <WafflrLockup
-          markSize={72}
-          wordmarkSize={34}
+          markSize={64}
+          wordmarkSize={32}
           showTagline
           tagline="Spin. Swipe. Decide."
           mutedColor={muted}
         />
       </View>
 
-      <View style={styles.diceBlock}>
-        <InstantDice size={132} />
+      <View style={styles.chooser}>
+        <Text style={[styles.chooserHint, { color: muted }]}>
+          Swipe left · Dice · Swipe right · Wheel
+        </Text>
+
+        <GestureDetector gesture={pan}>
+          <Animated.View style={[styles.cardRow, swipeStyle]}>
+            <Pressable
+              onPress={openDice}
+              style={({ pressed }) => [
+                styles.gameCard,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: colors.brand.pink[500],
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+              <Text style={styles.gameEmoji}>🎲</Text>
+              <Text style={[styles.gameTitle, { color: text }]}>Dice</Text>
+              <Text style={[styles.gameSub, { color: muted }]}>Swipe left</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={openWheel}
+              style={({ pressed }) => [
+                styles.gameCard,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: colors.brand.amber[500],
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+              <Text style={styles.gameEmoji}>🎡</Text>
+              <Text style={[styles.gameTitle, { color: text }]}>Wheel</Text>
+              <Text style={[styles.gameSub, { color: muted }]}>Swipe right</Text>
+            </Pressable>
+          </Animated.View>
+        </GestureDetector>
       </View>
 
       <View style={styles.actions}>
@@ -115,14 +192,7 @@ export default function HomeScreen() {
           {busy === 'bracket' ? (
             <ActivityIndicator color={colors.brand.amber[500]} />
           ) : (
-            <Text
-              style={[
-                styles.btnSecondaryText,
-                { color: isDark ? colors.text.primary.dark : colors.text.primary.light },
-              ]}
-            >
-              Create bracket
-            </Text>
+            <Text style={[styles.btnSecondaryText, { color: text }]}>Create bracket</Text>
           )}
         </Pressable>
       </View>
@@ -139,12 +209,42 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: spacing[4],
+    paddingTop: spacing[3],
   },
-  diceBlock: {
+  chooser: {
     flex: 1,
+    justifyContent: 'center',
+    gap: spacing[3],
+  },
+  chooserHint: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardRow: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  gameCard: {
+    flex: 1,
+    minHeight: 168,
+    borderRadius: radius['2xl'],
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: spacing[4],
+    gap: spacing[1],
+  },
+  gameEmoji: {
+    fontSize: 40,
+  },
+  gameTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  gameSub: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   actions: {
     flexDirection: 'row',
