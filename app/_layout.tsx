@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, useColorScheme } from 'react-native';
 
 import { RoomProvider } from '../src/room/RoomContext';
+import { SessionListsProvider } from '../src/session/SessionListsContext';
 import { colors } from '../src/theme/colors';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -36,22 +37,32 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <RoomProvider>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: isDark ? colors.canvas.dark : colors.canvas.light,
-            },
-            animation: 'fade',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="room/[code]" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="solo/wheel" options={{ presentation: 'modal' }} />
-        </Stack>
-      </RoomProvider>
+      <SessionListsProvider>
+        <RoomProvider>
+          <StatusBar style={isDark ? 'light' : 'dark'} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: {
+                backgroundColor: isDark
+                  ? colors.canvas.dark
+                  : colors.canvas.light,
+              },
+              animation: 'fade',
+            }}
+          >
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="room/[code]"
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="solo/wheel"
+              options={{ presentation: 'modal' }}
+            />
+          </Stack>
+        </RoomProvider>
+      </SessionListsProvider>
     </GestureHandlerRootView>
   );
 }
