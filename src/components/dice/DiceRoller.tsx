@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -8,7 +8,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { DiceCube } from './DiceCube';
-import { DieFace } from './DieFace';
 import { colors } from '../../theme/colors';
 import { neu } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
@@ -20,14 +19,18 @@ function randomFace() {
   return 1 + Math.floor(Math.random() * 6);
 }
 
+/** Base spin + per-die stagger (matches DiceCube) */
+function rollDurationMs(count: number) {
+  return 1400 + (count - 1) * 120 + 320; // spin + bounce settle
+}
+
 type Props = {
-  /** Base size for a single die */
   dieSize?: number;
 };
 
 /**
  * Solo dice table: 1–3 dice, ROLL button, slow 3D tumble.
- * One haptic on ROLL press only.
+ * One haptic on ROLL press only — no ticks during the roll.
  */
 export function DiceRoller({ dieSize = 112 }: Props) {
   const [count, setCount] = useState<DiceCount>(1);
@@ -35,45 +38,37 @@ export function DiceRoller({ dieSize = 112 }: Props) {
   const [rolling, setRolling] = useState(false);
   const [rollNonce, setRollNonce] = useState(0);
   const [displayValues, setDisplayValues] = useState<number[]>([1]);
-  const settledCount = useRef(0);
   const flashTimers = useRef<ReturnType<typeof setInterval>[]>([]);
+  const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const btnScale = useSharedValue(1);
   const btnStyle = useAnimatedStyle(() => ({
     transform: [{ scale: btnScale.value }],
   }));
 
-  // Keep arrays sized to count when not mid-roll
   useEffect(() => {
     if (rolling) return;
-    setValues((prev) => {
-      const next = Array.from({ length: count }, (_, i) => prev[i] ?? 1);
-      return next;
-    });
-    setDisplayValues((prev) => {
-      const next = Array.from({ length: count }, (_, i) => prev[i] ?? 1);
-      return next;
-    });
+    setValues((prev) => Array.from({ length: count }, (_, i) => prev[i] ?? 1));
+    setDisplayValues((prev) =>
+      Array.from({ length: count }, (_, i) => prev[i] ?? 1),
+    );
   }, [count, rolling]);
+
+  useEffect(() => {
+    return () => {
+      flashTimers.current.forEach(clearInterval);
+      if (endTimer.current) clearTimeout(endTimer.current);
+    };
+  }, []);
 
   const clearFlash = () => {
     flashTimers.current.forEach(clearInterval);
     flashTimers.current = [];
   };
 
-  const onDieSettled = useCallback(() => {
-    settledCount.current += 1;
-    if (settledCount.current >= count) {
-      clearFlash();
-      setDisplayValues((v) => [...v]); // final already set at roll start path
-      setRolling(false);
-    }
-  }, [count]);
-
   const roll = async () => {
     if (rolling) return;
 
-    // Single haptic on tap — no continuous ticks during roll
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {
@@ -86,31 +81,40 @@ export function DiceRoller({ dieSize = 112 }: Props) {
 
     const finals = Array.from({ length: count }, () => randomFace());
     setValues(finals);
-    settledCount.current = 0;
     setRolling(true);
     setRollNonce((n) => n + 1);
 
     clearFlash();
-    // Flash random faces during tumble (slow: ~90ms), then lock finals
-    const duration = 1400 + (count - 1) * 120;
+    if (endTimer.current) clearTimeout(endTimer.current);
+
+    const duration = rollDurationMs(count);
     const started = Date.now();
+
+    // Face flicker slows as the tumble decelerates
     const id = setInterval(() => {
       const elapsed = Date.now() - started;
-      if (elapsed >= duration) {
+      const t = Math.min(1, elapsed / (duration - 320));
+      if (elapsed >= duration - 280) {
         clearInterval(id);
         setDisplayValues(finals);
         return;
       }
-      // Slow down face changes as time progresses (natural)
-      const t = elapsed / duration;
-      if (Math.random() > t * 0.55) {
+      // Early: frequent; late: rare (natural stop)
+      if (Math.random() > t * 0.7) {
         setDisplayValues(Array.from({ length: count }, () => randomFace()));
       }
-    }, 90);
+    }, 100);
     flashTimers.current.push(id);
+
+    endTimer.current = setTimeout(() => {
+      clearFlash();
+      setDisplayValues(finals);
+      setRolling(false);
+    }, duration);
   };
 
-  const total = displayValues.reduce((a, b) => a + b, 0);
+  const total = (rolling ? displayValues : values).reduce((a, b) => a + b, 0);
+  const shown = rolling ? displayValues : values;
   const size =
     count === 1 ? dieSize + 16 : count === 2 ? dieSize : dieSize - 8;
 
@@ -118,14 +122,13 @@ export function DiceRoller({ dieSize = 112 }: Props) {
     <View style={styles.root}>
       <View style={styles.table}>
         <View style={styles.diceRow}>
-          {displayValues.map((v, i) => (
+          {shown.map((v, i) => (
             <DiceCube
-              key={`${rollNonce}-${i}`}
+              key={`die-${i}-${rollNonce}`}
               size={size}
-              value={rolling ? v : values[i] ?? v}
+              value={v}
               rollNonce={rollNonce}
               index={i}
-              onSettled={i === 0 ? onDieSettled : undefined}
             />
           ))}
         </View>
