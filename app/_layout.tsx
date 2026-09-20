@@ -19,7 +19,8 @@ import {
   stackScreenDefaults,
   playDiceOptions,
   playWheelOptions,
-  roomOptions,
+  roomFromLeftOptions,
+  roomFromRightOptions,
   modalOptions,
 } from '../src/navigation/transitions';
 
@@ -54,7 +55,13 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
             <Stack.Screen name="play/dice" options={playDiceOptions} />
             <Stack.Screen name="play/wheel" options={playWheelOptions} />
-            <Stack.Screen name="room/[code]" options={roomOptions} />
+            {/* Left-card room entry */}
+            <Stack.Screen name="room/[code]" options={roomFromLeftOptions} />
+            {/* Right-card bracket entry — same UI, opposite slide */}
+            <Stack.Screen
+              name="bracket/[code]"
+              options={roomFromRightOptions}
+            />
             <Stack.Screen name="solo/wheel" options={modalOptions} />
           </Stack>
         </RoomProvider>

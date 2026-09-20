@@ -12,11 +12,13 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withDelay,
   withTiming,
   withRepeat,
   withSequence,
   Easing,
   interpolate,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 import { useRoom } from '../../src/room/RoomContext';
@@ -31,6 +33,9 @@ import { SPRINGS } from '../../src/constants/springs';
 
 const SCREEN_W = Dimensions.get('window').width;
 
+/** Plays sequential bounce-in only once per JS runtime (cold start). */
+let homeEntrancePlayed = false;
+
 type CardId = 'dice' | 'wheel' | 'room' | 'bracket';
 
 type CardConfig = {
@@ -40,6 +45,8 @@ type CardConfig = {
   emoji: string;
   accent: string;
   accentSoft: string;
+  /** Grid side — drives stack slide direction */
+  side: 'left' | 'right';
 };
 
 const CARDS: CardConfig[] = [
@@ -50,6 +57,7 @@ const CARDS: CardConfig[] = [
     emoji: '🎲',
     accent: colors.brand.pink[500],
     accentSoft: colors.brand.pink[100],
+    side: 'left',
   },
   {
     id: 'wheel',
@@ -58,6 +66,7 @@ const CARDS: CardConfig[] = [
     emoji: '🎡',
     accent: colors.brand.amber[500],
     accentSoft: colors.brand.amber[100],
+    side: 'right',
   },
   {
     id: 'room',
@@ -66,6 +75,7 @@ const CARDS: CardConfig[] = [
     emoji: '🏠',
     accent: colors.brand.emerald[500],
     accentSoft: colors.brand.emerald[100],
+    side: 'left',
   },
   {
     id: 'bracket',
@@ -74,20 +84,73 @@ const CARDS: CardConfig[] = [
     emoji: '🏆',
     accent: colors.brand.amber[600],
     accentSoft: '#FEF3C7',
+    side: 'right',
   },
 ];
+
+/** Stagger delays (ms) — hero first, then grid. */
+const ENTRANCE = {
+  logo: 0,
+  wordmark: 90,
+  tagline: 170,
+  hint: 280,
+  cards: [360, 420, 480, 540] as const,
+};
+
+function BounceIn({
+  progress,
+  children,
+  style,
+}: {
+  progress: SharedValue<number>;
+  children: React.ReactNode;
+  style?: object;
+}) {
+  const animStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    return {
+      opacity: p,
+      transform: [
+        { translateY: interpolate(p, [0, 1], [28, 0]) },
+        { scale: interpolate(p, [0, 1], [0.82, 1]) },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={[style, animStyle]}>{children}</Animated.View>
+  );
+}
+
+function useEntranceProgress(delayMs: number) {
+  const progress = useSharedValue(homeEntrancePlayed ? 1 : 0);
+
+  useEffect(() => {
+    if (homeEntrancePlayed) {
+      progress.value = 1;
+      return;
+    }
+    progress.value = withDelay(delayMs, withSpring(1, SPRINGS.bouncy));
+  }, [delayMs, progress]);
+
+  return progress;
+}
 
 function TapGameCard({
   config,
   disabled,
   onPress,
+  entranceDelay,
 }: {
   config: CardConfig;
   disabled: boolean;
   onPress: () => void;
+  entranceDelay: number;
 }) {
+  const progress = useEntranceProgress(entranceDelay);
+
   return (
-    <View style={styles.cardSlot}>
+    <BounceIn progress={progress} style={styles.cardSlot}>
       <InstantPressable
         onPress={onPress}
         disabled={disabled}
@@ -109,58 +172,74 @@ function TapGameCard({
           {config.subtitle}
         </Text>
       </InstantPressable>
-    </View>
+    </BounceIn>
   );
 }
 
 function AnimatedHero() {
-  const bounce = useSharedValue(0);
+  const logoProgress = useEntranceProgress(ENTRANCE.logo);
+  const wordProgress = useEntranceProgress(ENTRANCE.wordmark);
+  const tagProgress = useEntranceProgress(ENTRANCE.tagline);
+
+  const idleBob = useSharedValue(0);
   const sparkle = useSharedValue(0);
 
   useEffect(() => {
-    bounce.value = withRepeat(
-      withSequence(
-        withSpring(1, SPRINGS.bouncy),
-        withSpring(0, SPRINGS.gentle),
-      ),
-      -1,
-      false,
-    );
-    sparkle.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      false,
-    );
-  }, [bounce, sparkle]);
+    // Start idle motion after entrance settles
+    const t = setTimeout(() => {
+      idleBob.value = withRepeat(
+        withSequence(
+          withSpring(1, SPRINGS.bouncy),
+          withSpring(0, SPRINGS.gentle),
+        ),
+        -1,
+        false,
+      );
+      sparkle.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      );
+    }, homeEntrancePlayed ? 0 : 700);
+    return () => clearTimeout(t);
+  }, [idleBob, sparkle]);
 
-  const markStyle = useAnimatedStyle(() => ({
+  const logoIdle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(bounce.value, [0, 1], [0, -10]) },
-      { scale: interpolate(bounce.value, [0, 1], [1, 1.06]) },
+      { translateY: interpolate(idleBob.value, [0, 1], [0, -8]) },
+      { scale: interpolate(idleBob.value, [0, 1], [1, 1.04]) },
     ],
   }));
 
-  const tagStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sparkle.value, [0, 1], [0.75, 1]),
-    transform: [{ scale: interpolate(sparkle.value, [0, 1], [0.98, 1.03]) }],
+  const tagIdle = useAnimatedStyle(() => ({
+    opacity: interpolate(sparkle.value, [0, 1], [0.8, 1]),
   }));
 
   return (
     <View style={styles.hero}>
-      <Animated.View style={markStyle}>
-        <WafflrMark size={108} />
-      </Animated.View>
-      <WafflrWordmark size={40} color={colors.brand.slate[900]} />
-      <Animated.View style={[styles.tagPill, tagStyle]}>
-        <Text style={styles.tagPillText}>
-          <Text style={{ color: colors.brand.amber[600] }}>Spin. </Text>
-          <Text style={{ color: colors.brand.pink[500] }}>Swipe. </Text>
-          <Text style={{ color: colors.brand.emerald[600] }}>Decide.</Text>
-        </Text>
-      </Animated.View>
+      <BounceIn progress={logoProgress}>
+        <Animated.View style={logoIdle}>
+          <WafflrMark size={128} />
+        </Animated.View>
+      </BounceIn>
+
+      <View style={styles.heroCopy}>
+        <BounceIn progress={wordProgress}>
+          <WafflrWordmark size={46} color={colors.brand.slate[900]} />
+        </BounceIn>
+        <BounceIn progress={tagProgress}>
+          <Animated.View style={[styles.tagPill, tagIdle]}>
+            <Text style={styles.tagPillText}>
+              <Text style={{ color: colors.brand.amber[600] }}>Spin. </Text>
+              <Text style={{ color: colors.brand.pink[500] }}>Swipe. </Text>
+              <Text style={{ color: colors.brand.emerald[600] }}>Decide.</Text>
+            </Text>
+          </Animated.View>
+        </BounceIn>
+      </View>
     </View>
   );
 }
@@ -169,8 +248,17 @@ export default function HomeScreen() {
   const { create, isLoading } = useRoom();
   const { upsertRoom, upsertBracket } = useSessionLists();
   const [busy, setBusy] = useState<CardId | null>(null);
+  const hintProgress = useEntranceProgress(ENTRANCE.hint);
 
-  // Haptic is handled by InstantPressable — navigate immediately
+  useEffect(() => {
+    // Mark entrance as done after the last card delay + spring settle
+    if (homeEntrancePlayed) return;
+    const t = setTimeout(() => {
+      homeEntrancePlayed = true;
+    }, ENTRANCE.cards[3] + 500);
+    return () => clearTimeout(t);
+  }, []);
+
   const openDice = () => {
     if (busy) return;
     router.push('/play/dice');
@@ -188,6 +276,7 @@ export default function HomeScreen() {
       try {
         const { code } = await create({ displayName: 'You' });
         upsertRoom({ code, title: `Room ${code}`, role: 'host' });
+        // Left column → slide_from_left
         router.push(`/room/${code}`);
       } catch {
         // stay
@@ -204,7 +293,8 @@ export default function HomeScreen() {
       try {
         const { code } = await create({ displayName: 'You' });
         upsertBracket({ code, title: `Bracket ${code}`, role: 'host' });
-        router.push(`/room/${code}`);
+        // Right column → slide_from_right via bracket alias route
+        router.push(`/bracket/${code}`);
       } catch {
         // stay
       } finally {
@@ -225,15 +315,18 @@ export default function HomeScreen() {
       <AnimatedHero />
 
       <View style={styles.gridBlock}>
-        <Text style={styles.hint}>Tap a card · go</Text>
+        <BounceIn progress={hintProgress}>
+          <Text style={styles.hint}>Tap a card · go</Text>
+        </BounceIn>
 
         <View style={styles.grid}>
-          {CARDS.map((c) => (
+          {CARDS.map((c, i) => (
             <TapGameCard
               key={c.id}
               config={c}
               disabled={!!busy}
               onPress={handlers[c.id]}
+              entranceDelay={ENTRANCE.cards[i] ?? 400}
             />
           ))}
         </View>
@@ -258,13 +351,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
   },
   hero: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: spacing[3],
-    paddingBottom: spacing[2],
-    gap: spacing[1],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[3],
+    paddingHorizontal: spacing[1],
+    gap: spacing[4],
+  },
+  heroCopy: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: spacing[2],
   },
   tagPill: {
-    marginTop: spacing[2],
+    alignSelf: 'flex-start',
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
     borderRadius: radius.full,
@@ -276,7 +376,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   tagPillText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.2,
   },

@@ -18,30 +18,37 @@ export const stackScreenDefaults: NativeStackNavigationOptions = {
   animationDuration: TRANSITION_MS,
   gestureEnabled: true,
   fullScreenGestureEnabled: true,
-  // Detach inactive screens from the view hierarchy (memory + jank)
   freezeOnBlur: true,
   contentStyle: {
     backgroundColor: '#FFF8EB',
   },
 };
 
-export const playDiceOptions: NativeStackNavigationOptions = {
+/** Left-column home cards (Dice, Room) */
+export const fromLeftOptions: NativeStackNavigationOptions = {
   ...stackScreenDefaults,
   animation: 'slide_from_left',
   animationDuration: TRANSITION_MS,
 };
 
-export const playWheelOptions: NativeStackNavigationOptions = {
+/** Right-column home cards (Wheel, Bracket) */
+export const fromRightOptions: NativeStackNavigationOptions = {
   ...stackScreenDefaults,
   animation: 'slide_from_right',
   animationDuration: TRANSITION_MS,
 };
 
-export const roomOptions: NativeStackNavigationOptions = {
-  ...stackScreenDefaults,
-  animation: 'slide_from_right',
-  animationDuration: TRANSITION_MS,
-};
+export const playDiceOptions = fromLeftOptions;
+export const playWheelOptions = fromRightOptions;
+
+/** Room opened from left card */
+export const roomFromLeftOptions = fromLeftOptions;
+
+/** Bracket-style room from right card — same route, right slide */
+export const roomFromRightOptions = fromRightOptions;
+
+/** @deprecated use roomFromLeftOptions / roomFromRightOptions */
+export const roomOptions = fromRightOptions;
 
 export const modalOptions: NativeStackNavigationOptions = {
   ...stackScreenDefaults,
