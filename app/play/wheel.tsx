@@ -33,9 +33,7 @@ export default function PlayWheelScreen() {
   const [popupOpen, setPopupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [spinning, setSpinning] = useState(false);
-  /** Bumps to re-spin without remounting the wheel */
   const [spinNonce, setSpinNonce] = useState(0);
-  /** Only remount when topic/variation changes */
   const [catalogKey, setCatalogKey] = useState(0);
 
   const { create, isLoading } = useRoom();
@@ -80,6 +78,11 @@ export default function PlayWheelScreen() {
     setSpinNonce(0);
   };
 
+  const onSpinStart = useCallback(() => {
+    setSpinning(true);
+    setWinner(null);
+  }, []);
+
   const onSpinEnd = useCallback((segment: WheelSegment) => {
     setSpinning(false);
     setWinner(segment);
@@ -90,12 +93,9 @@ export default function PlayWheelScreen() {
     setPopupOpen(false);
   }, []);
 
-  /** Close popup and spin again — keep wheel instance, bump spinNonce */
   const spinAgain = useCallback(() => {
     setPopupOpen(false);
     setWinner(null);
-    setSpinning(true);
-    // slight delay so modal unmounts before spin starts
     requestAnimationFrame(() => {
       setSpinNonce((n) => n + 1);
     });
@@ -186,10 +186,8 @@ export default function PlayWheelScreen() {
               segments={segments}
               size={268}
               spinNonce={spinNonce}
-              onSpinEnd={(seg) => {
-                setSpinning(true);
-                onSpinEnd(seg);
-              }}
+              onSpinStart={onSpinStart}
+              onSpinEnd={onSpinEnd}
               hideResult
               tickHaptics={false}
               spinStartHaptic
