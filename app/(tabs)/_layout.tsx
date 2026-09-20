@@ -1,6 +1,8 @@
-import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
+import { Platform } from 'react-native';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
 import { colors } from '../../src/theme/colors';
 
@@ -26,23 +28,36 @@ function TabBarIcon({
   );
 }
 
+function tabHaptic() {
+  void Haptics.selectionAsync().catch(() => undefined);
+}
+
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        // Detach inactive tabs — less JS work when switching
+        freezeOnBlur: true,
+        lazy: true,
         tabBarActiveTintColor: colors.brand.amber[600],
         tabBarInactiveTintColor: colors.brand.slate[400],
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: '#FFFDF7',
           borderTopColor: colors.brand.amber[100],
-          height: 64,
+          height: Platform.select({ ios: 84, default: 64 }),
           paddingTop: 6,
-          paddingBottom: 8,
+          paddingBottom: Platform.select({ ios: 28, default: 8 }),
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '700',
+        },
+      }}
+      screenListeners={{
+        tabPress: () => {
+          tabHaptic();
         },
       }}
     >

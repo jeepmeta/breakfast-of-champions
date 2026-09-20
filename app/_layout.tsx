@@ -1,20 +1,31 @@
+// Must be first — enables native gesture system before any navigator mounts
+import 'react-native-gesture-handler';
+
 import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useFonts, Fredoka_600SemiBold, Fredoka_700Bold } from '@expo-google-fonts/fredoka';
+import {
+  useFonts,
+  Fredoka_600SemiBold,
+  Fredoka_700Bold,
+} from '@expo-google-fonts/fredoka';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
 
 import { RoomProvider } from '../src/room/RoomContext';
 import { SessionListsProvider } from '../src/session/SessionListsContext';
+import {
+  stackScreenDefaults,
+  playDiceOptions,
+  playWheelOptions,
+  roomOptions,
+  modalOptions,
+} from '../src/navigation/transitions';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // ignore if already prevented
 });
-
-/** Keep stack transitions snappy app-wide (~native iOS feel). */
-const FAST_MS = 200;
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -39,42 +50,12 @@ export default function RootLayout() {
       <SessionListsProvider>
         <RoomProvider>
           <StatusBar style="dark" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: {
-                backgroundColor: '#FFF8EB',
-              },
-              animation: 'fade',
-              animationDuration: FAST_MS,
-            }}
-          >
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="play/dice"
-              options={{
-                animation: 'slide_from_left',
-                animationDuration: FAST_MS,
-              }}
-            />
-            <Stack.Screen
-              name="play/wheel"
-              options={{
-                animation: 'slide_from_right',
-                animationDuration: FAST_MS,
-              }}
-            />
-            <Stack.Screen
-              name="room/[code]"
-              options={{
-                animation: 'slide_from_right',
-                animationDuration: FAST_MS,
-              }}
-            />
-            <Stack.Screen
-              name="solo/wheel"
-              options={{ presentation: 'modal', animationDuration: FAST_MS }}
-            />
+          <Stack screenOptions={stackScreenDefaults}>
+            <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
+            <Stack.Screen name="play/dice" options={playDiceOptions} />
+            <Stack.Screen name="play/wheel" options={playWheelOptions} />
+            <Stack.Screen name="room/[code]" options={roomOptions} />
+            <Stack.Screen name="solo/wheel" options={modalOptions} />
           </Stack>
         </RoomProvider>
       </SessionListsProvider>

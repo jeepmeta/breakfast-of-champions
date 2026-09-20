@@ -2,13 +2,11 @@ import { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  Pressable,
   StyleSheet,
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -25,6 +23,7 @@ import { useRoom } from '../../src/room/RoomContext';
 import { useSessionLists } from '../../src/session/SessionListsContext';
 import { WafflrMark } from '../../src/components/brand';
 import { WafflrWordmark } from '../../src/components/brand';
+import { InstantPressable } from '../../src/navigation/InstantPressable';
 import { colors } from '../../src/theme/colors';
 import { neu } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
@@ -87,27 +86,12 @@ function TapGameCard({
   disabled: boolean;
   onPress: () => void;
 }) {
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.96, SPRINGS.stiff);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, SPRINGS.snappy);
-  };
-
   return (
-    <Animated.View style={[styles.cardSlot, animStyle]}>
-      <Pressable
+    <View style={styles.cardSlot}>
+      <InstantPressable
         onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
         disabled={disabled}
+        accessibilityLabel={config.title}
         style={[
           styles.gameCard,
           {
@@ -124,8 +108,8 @@ function TapGameCard({
         <Text style={[styles.gameSub, { color: config.accent }]}>
           {config.subtitle}
         </Text>
-      </Pressable>
-    </Animated.View>
+      </InstantPressable>
+    </View>
   );
 }
 
@@ -181,33 +165,24 @@ function AnimatedHero() {
   );
 }
 
-/** Fire haptic without awaiting — never block navigation. */
-function bump() {
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-    () => undefined,
-  );
-}
-
 export default function HomeScreen() {
   const { create, isLoading } = useRoom();
   const { upsertRoom, upsertBracket } = useSessionLists();
   const [busy, setBusy] = useState<CardId | null>(null);
 
+  // Haptic is handled by InstantPressable — navigate immediately
   const openDice = () => {
     if (busy) return;
-    bump();
     router.push('/play/dice');
   };
 
   const openWheel = () => {
     if (busy) return;
-    bump();
     router.push('/play/wheel');
   };
 
   const createRoom = () => {
     if (busy || isLoading) return;
-    bump();
     setBusy('room');
     void (async () => {
       try {
@@ -224,7 +199,6 @@ export default function HomeScreen() {
 
   const createBracket = () => {
     if (busy || isLoading) return;
-    bump();
     setBusy('bracket');
     void (async () => {
       try {
