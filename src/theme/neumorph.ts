@@ -1,19 +1,24 @@
+import type { TextStyle, ViewStyle } from 'react-native';
+
 import { colors } from './colors';
-import type { ViewStyle, TextStyle } from 'react-native';
+import { affect } from './affect';
+import { elevationStyle } from './shadows';
 
 /**
  * Light candy / neumorph surface tokens.
- * Soft raised cards on warm cream canvas — bubbly & tangible.
+ * Multi-layer depth + affective color roles (see affect.ts / shadows.ts).
  */
 export const neu = {
-  canvas: '#FFF8EB',
-  canvasAlt: '#FFFDF7',
+  canvas: affect.comfort.canvas,
+  canvasAlt: affect.comfort.canvasAlt,
   card: colors.brand.white,
-  cardInset: '#FFF9F0',
-  text: colors.brand.slate[900],
-  muted: colors.brand.slate[500],
-  borderSoft: colors.brand.amber[100],
+  cardInset: affect.comfort.inset,
+  text: affect.type.primary,
+  muted: affect.type.muted,
+  borderSoft: affect.reward.softBorder,
   border: colors.brand.amber[200],
+
+  // Legacy single-layer (kept for gradual migration)
   shadow: {
     color: '#78350F',
     opacity: 0.12,
@@ -37,17 +42,13 @@ export const neu = {
   },
 } as const;
 
-/** Raised white card — default surface */
+/** Raised white card — multi-layer card elevation */
 export const neuCard: ViewStyle = {
   backgroundColor: neu.card,
   borderRadius: 20,
   borderWidth: 1.5,
   borderColor: neu.borderSoft,
-  shadowColor: neu.shadow.color,
-  shadowOpacity: neu.shadow.opacity,
-  shadowRadius: neu.shadow.radius,
-  shadowOffset: neu.shadow.offset,
-  elevation: neu.shadow.elevation,
+  ...elevationStyle('card'),
 };
 
 /** Softer raised chip / pill */
@@ -56,24 +57,16 @@ export const neuPill: ViewStyle = {
   borderRadius: 999,
   borderWidth: 1.5,
   borderColor: neu.borderSoft,
-  shadowColor: neu.shadowSoft.color,
-  shadowOpacity: neu.shadowSoft.opacity,
-  shadowRadius: neu.shadowSoft.radius,
-  shadowOffset: neu.shadowSoft.offset,
-  elevation: neu.shadowSoft.elevation,
+  ...elevationStyle('soft'),
 };
 
-/** Primary amber CTA */
+/** Primary amber CTA — reward-tinted lift */
 export const neuPrimaryBtn: ViewStyle = {
-  backgroundColor: colors.brand.amber[400],
+  backgroundColor: affect.reward.solid,
   borderRadius: 18,
   borderWidth: 1.5,
-  borderColor: colors.brand.amber[500],
-  shadowColor: colors.brand.amber[800],
-  shadowOpacity: 0.22,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 5 },
-  elevation: 4,
+  borderColor: affect.reward.solidStrong,
+  ...elevationStyle('cta'),
   minHeight: 52,
   alignItems: 'center',
   justifyContent: 'center',
@@ -81,7 +74,7 @@ export const neuPrimaryBtn: ViewStyle = {
 };
 
 export const neuPrimaryBtnText: TextStyle = {
-  color: colors.brand.slate[900],
+  color: affect.type.primary,
   fontSize: 16,
   fontWeight: '800',
 };
@@ -92,11 +85,7 @@ export const neuSecondaryBtn: ViewStyle = {
   borderRadius: 18,
   borderWidth: 1.5,
   borderColor: neu.border,
-  shadowColor: neu.shadowSoft.color,
-  shadowOpacity: neu.shadowSoft.opacity,
-  shadowRadius: neu.shadowSoft.radius,
-  shadowOffset: neu.shadowSoft.offset,
-  elevation: neu.shadowSoft.elevation,
+  ...elevationStyle('soft'),
   minHeight: 48,
   alignItems: 'center',
   justifyContent: 'center',
@@ -109,6 +98,42 @@ export const neuSecondaryBtnText: TextStyle = {
   fontWeight: '700',
 };
 
+/** Floating modal / winner plane */
+export const neuFloat: ViewStyle = {
+  backgroundColor: neu.card,
+  borderRadius: 22,
+  borderWidth: 2,
+  borderColor: affect.success.softBorder,
+  ...elevationStyle('float'),
+};
+
+/** Inset well — pressed / input recess */
+export const neuInset: ViewStyle = {
+  backgroundColor: neu.cardInset,
+  borderRadius: 16,
+  borderWidth: 1,
+  borderColor: affect.reward.softBorder,
+  ...elevationStyle('inset'),
+};
+
+/** Success soft surface (match / ready) */
+export const neuSuccessSoft: ViewStyle = {
+  backgroundColor: affect.success.soft,
+  borderRadius: 20,
+  borderWidth: 1.5,
+  borderColor: affect.success.softBorder,
+  ...elevationStyle('card'),
+};
+
+/** Delight soft surface (dice / celebration accent) */
+export const neuDelightSoft: ViewStyle = {
+  backgroundColor: affect.delight.soft,
+  borderRadius: 20,
+  borderWidth: 1.5,
+  borderColor: affect.delight.softBorder,
+  ...elevationStyle('card'),
+};
+
 /** Section label */
 export const neuSection: TextStyle = {
   fontSize: 12,
@@ -117,3 +142,7 @@ export const neuSection: TextStyle = {
   letterSpacing: 1,
   color: neu.muted,
 };
+
+export { affect } from './affect';
+export { elevationStyle, shadowLayers, ambientHost, contactFace } from './shadows';
+export type { ElevationName, ShadowLayer } from './shadows';
