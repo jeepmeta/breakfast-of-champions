@@ -24,28 +24,34 @@ export const stackScreenDefaults: NativeStackNavigationOptions = {
   },
 };
 
-/** Left-column home cards (Dice, Room) */
+/**
+ * Home grid columns (2-col):
+ *  Dice | Wheel
+ *  Room | Bracket
+ *  Profile | Settings
+ * Left column → slide_from_left; right → slide_from_right.
+ */
 export const fromLeftOptions: NativeStackNavigationOptions = {
   ...stackScreenDefaults,
   animation: 'slide_from_left',
   animationDuration: TRANSITION_MS,
 };
 
-/** Right-column home cards (Wheel, Bracket) */
 export const fromRightOptions: NativeStackNavigationOptions = {
   ...stackScreenDefaults,
   animation: 'slide_from_right',
   animationDuration: TRANSITION_MS,
 };
 
+/** Left column: Dice, Room, Profile */
 export const playDiceOptions = fromLeftOptions;
-export const playWheelOptions = fromRightOptions;
-
-/** Room opened from left card */
 export const roomFromLeftOptions = fromLeftOptions;
+export const profileOptions = fromLeftOptions;
 
-/** Bracket-style room from right card — same route, right slide */
+/** Right column: Wheel, Bracket, Settings */
+export const playWheelOptions = fromRightOptions;
 export const roomFromRightOptions = fromRightOptions;
+export const settingsOptions = fromRightOptions;
 
 /** @deprecated use roomFromLeftOptions / roomFromRightOptions */
 export const roomOptions = fromRightOptions;

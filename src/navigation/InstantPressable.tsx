@@ -4,6 +4,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withSequence,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
@@ -23,8 +24,7 @@ type Props = {
 };
 
 /**
- * Gesture-handler Pressable + micro scale + optional haptic.
- * Prefer this over RN Pressable for lower touch latency under concurrent gestures.
+ * Gesture-handler Pressable + bounce scale + optional haptic.
  */
 export function InstantPressable({
   children,
@@ -46,10 +46,14 @@ export function InstantPressable({
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       onPressIn={() => {
-        scale.value = withSpring(0.97, SPRINGS.stiff);
+        scale.value = withSpring(0.94, SPRINGS.stiff);
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, SPRINGS.snappy);
+        // Slight overshoot bounce on release
+        scale.value = withSequence(
+          withSpring(1.04, SPRINGS.bouncy),
+          withSpring(1, SPRINGS.snappy),
+        );
       }}
       onPress={() => {
         if (haptic) {
