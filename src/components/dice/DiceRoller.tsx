@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 
 import { PHYSICS_DICE_HTML } from './physicsDiceHtml';
 import { DiceResultPopup } from './DiceResultPopup';
+import { InstantPressable } from '../../navigation/InstantPressable';
 import { colors } from '../../theme/colors';
-import { neu } from '../../theme/neumorph';
+import { neu, affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 
 export type DiceCount = 1 | 2 | 3 | 4 | 5 | 6;
@@ -139,13 +140,10 @@ export function DiceCountPills({
       {([1, 2, 3, 4, 5, 6] as DiceCount[]).map((n) => {
         const active = count === n;
         return (
-          <Pressable
+          <InstantPressable
             key={n}
             disabled={disabled}
-            onPress={() => {
-              void Haptics.selectionAsync().catch(() => undefined);
-              onChange(n);
-            }}
+            onPress={() => onChange(n)}
             style={[
               styles.pill,
               active && styles.pillActive,
@@ -155,7 +153,7 @@ export function DiceCountPills({
             <Text style={[styles.pillText, active && styles.pillTextActive]}>
               {n}
             </Text>
-          </Pressable>
+          </InstantPressable>
         );
       })}
     </View>
@@ -169,19 +167,19 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: radius['2xl'],
     overflow: 'hidden',
-    backgroundColor: neu.canvas,
-    borderWidth: 2,
-    borderColor: neu.borderSoft,
+    backgroundColor: '#145A40',
+    borderWidth: 3,
+    borderColor: '#0F4530',
   },
   web: { flex: 1, backgroundColor: 'transparent' },
-  webContainer: { flex: 1, backgroundColor: neu.canvas },
+  webContainer: { flex: 1, backgroundColor: '#145A40' },
   loading: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: neu.canvas,
+    backgroundColor: '#145A40',
   },
-  loadingText: { fontWeight: '700', color: neu.muted },
+  loadingText: { fontWeight: '700', color: 'rgba(255,255,255,0.75)' },
   rollingBadge: {
     position: 'absolute',
     top: 12,
@@ -191,14 +189,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rollingText: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     overflow: 'hidden',
     fontWeight: '800',
     fontSize: 12,
-    color: colors.brand.pink[600],
+    color: affect.delight.text,
   },
   pills: { flexDirection: 'row', gap: spacing[2], width: '100%' },
   pill: {
@@ -212,10 +210,10 @@ const styles = StyleSheet.create({
     borderColor: neu.borderSoft,
   },
   pillActive: {
-    backgroundColor: colors.brand.pink[100],
-    borderColor: colors.brand.pink[500],
+    backgroundColor: affect.delight.soft,
+    borderColor: affect.delight.solid,
   },
   pillDisabled: { opacity: 0.5 },
   pillText: { fontSize: 16, fontWeight: '800', color: neu.text },
-  pillTextActive: { color: colors.brand.pink[700] },
+  pillTextActive: { color: affect.delight.text },
 });
