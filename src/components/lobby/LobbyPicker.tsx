@@ -8,7 +8,6 @@ import {
   type PlayableMode,
   type ModeDef,
 } from '../../constants/game-modes';
-import { colors } from '../../theme/colors';
 import {
   neu,
   neuCard,
@@ -16,8 +15,10 @@ import {
   neuPrimaryBtn,
   neuPrimaryBtnText,
   neuSection,
+  affect,
+  elevationStyle,
 } from '../../theme/neumorph';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing } from '../../theme/tokens';
 
 type Props = {
   playerCount: number;
@@ -146,11 +147,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[1],
     marginBottom: spacing[1],
+    backgroundColor: affect.reward.soft,
+    borderColor: affect.reward.softBorder,
   },
   tierText: {
     fontSize: 12,
     fontWeight: '800',
-    color: colors.brand.amber[700],
+    color: affect.reward.text,
     letterSpacing: 0.3,
   },
   section: {
@@ -171,10 +174,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
   },
   chipActive: {
-    backgroundColor: colors.brand.amber[400],
-    borderColor: colors.brand.amber[500],
-    shadowColor: colors.brand.amber[800],
-    shadowOpacity: 0.2,
+    backgroundColor: affect.reward.solid,
+    borderColor: affect.reward.solidStrong,
+    ...elevationStyle('cta'),
   },
   chipEmoji: {
     fontSize: 16,
@@ -185,7 +187,7 @@ const styles = StyleSheet.create({
     color: neu.text,
   },
   chipLabelActive: {
-    color: colors.brand.slate[900],
+    color: affect.type.primary,
   },
   modeGrid: {
     flexDirection: 'row',
@@ -201,10 +203,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   modeCardActive: {
-    borderColor: colors.brand.emerald[400],
-    backgroundColor: '#ECFDF5',
-    shadowColor: colors.brand.emerald[700],
-    shadowOpacity: 0.15,
+    backgroundColor: affect.success.soft,
+    borderColor: affect.success.softBorder,
+    ...elevationStyle('card'),
   },
   modeLocked: {
     opacity: 0.45,

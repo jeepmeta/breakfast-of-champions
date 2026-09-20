@@ -1,6 +1,7 @@
 /**
  * Wafflr semantic color tokens.
- * Source of truth: design-tokens.md + branding-kit.html — never hard-code hex elsewhere.
+ * Source of truth: design-tokens + branding-kit — never hard-code hex elsewhere.
+ * Affective roles live in theme/affect.ts (comfort / reward / success / delight).
  */
 
 export const colors = {
@@ -61,8 +62,9 @@ export const colors = {
     white: '#FFFFFF',
     black: '#000000',
   },
+  /** Prefer warm cream for light shells (comfort). */
   canvas: {
-    light: '#F8FAFC',
+    light: '#FFF8EB',
     dark: '#0F172A',
   },
   elevated: {
@@ -70,7 +72,7 @@ export const colors = {
     dark: '#1E293B',
   },
   surface: {
-    light: '#F1F5F9',
+    light: '#FFFBF3',
     dark: '#334155',
   },
   text: {
@@ -89,7 +91,7 @@ export const colors = {
     onPrimary: '#0F172A',
   },
   border: {
-    light: '#E2E8F0',
+    light: '#FDE68A',
     dark: '#334155',
     focus: '#F59E0B',
   },

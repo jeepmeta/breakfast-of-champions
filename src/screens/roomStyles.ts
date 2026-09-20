@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+
 import { colors } from '../theme/colors';
 import {
   neu,
@@ -9,6 +10,9 @@ import {
   neuSecondaryBtn,
   neuSecondaryBtnText,
   neuSection,
+  neuFloat,
+  affect,
+  elevationStyle,
 } from '../theme/neumorph';
 import { spacing, radius } from '../theme/tokens';
 
@@ -36,7 +40,7 @@ export const roomStyles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '900',
     letterSpacing: 4,
-    color: neu.text,
+    color: affect.reward.text,
   },
   readySummary: {
     fontSize: 14,
@@ -48,7 +52,7 @@ export const roomStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     marginTop: spacing[1],
-    color: colors.brand.emerald[600],
+    color: affect.success.text,
   },
   list: {
     paddingHorizontal: spacing[4],
@@ -80,11 +84,7 @@ export const roomStyles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...elevationStyle('soft'),
   },
   avatarText: {
     color: '#fff',
@@ -108,8 +108,9 @@ export const roomStyles = StyleSheet.create({
     paddingVertical: spacing[1],
   },
   readyPillOn: {
-    backgroundColor: colors.brand.emerald[500],
-    borderColor: colors.brand.emerald[600],
+    backgroundColor: affect.success.solid,
+    borderColor: affect.success.solidStrong,
+    ...elevationStyle('soft'),
   },
   readyPillOff: {
     backgroundColor: neu.cardInset,
@@ -182,7 +183,7 @@ export const roomStyles = StyleSheet.create({
   celebrateTitle: {
     fontSize: 28,
     fontWeight: '900',
-    color: colors.brand.emerald[600],
+    color: affect.success.text,
   },
   celebrateItem: {
     fontSize: 22,
@@ -212,21 +213,17 @@ export const roomStyles = StyleSheet.create({
     zIndex: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     paddingHorizontal: spacing[6],
   },
   winnerCard: {
-    ...neuCard,
+    ...neuFloat,
     width: '100%',
     maxWidth: 340,
-    borderColor: colors.brand.emerald[400],
-    borderWidth: 2.5,
     paddingVertical: spacing[8],
     paddingHorizontal: spacing[6],
     alignItems: 'center',
     gap: spacing[1],
-    shadowColor: colors.brand.emerald[700],
-    shadowOpacity: 0.25,
   },
   winnerCardEmoji: {
     fontSize: 56,
@@ -236,7 +233,7 @@ export const roomStyles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '900',
     textAlign: 'center',
-    color: colors.brand.emerald[600],
+    color: affect.success.text,
   },
   winnerCardSub: {
     fontSize: 15,
@@ -249,12 +246,8 @@ export const roomStyles = StyleSheet.create({
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[8],
     borderRadius: radius.full,
-    backgroundColor: colors.brand.emerald[500],
-    shadowColor: colors.brand.emerald[800],
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    backgroundColor: affect.success.solid,
+    ...elevationStyle('soft'),
   },
   winnerCardBtnText: {
     color: '#fff',
@@ -302,12 +295,12 @@ export const roomStyles = StyleSheet.create({
   tallyChipWins: {
     fontSize: 13,
     fontWeight: '900',
-    color: colors.brand.amber[600],
+    color: affect.reward.text,
   },
   lobbyWrap: {
     ...neuCard,
-    marginHorizontal: spacing[4],
+    marginHorizontal: 0,
     padding: spacing[4],
-    marginBottom: spacing[3],
+    marginBottom: spacing[1],
   },
 });
