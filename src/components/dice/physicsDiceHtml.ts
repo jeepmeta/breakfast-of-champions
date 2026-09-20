@@ -1,6 +1,7 @@
 /**
- * Three.js + Cannon-es dice table — swipe to cast, settle before result.
- * Smaller dice / wider frustum; idle stack in lower-left with swipe hint.
+ * Three.js + Cannon-es dice table.
+ * - Swipe mapped to camera-right / camera-forward on the table plane
+ * - Always force-snaps dice flat if they don't settle (no stuck rolls)
  */
 export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
 <html>
@@ -26,14 +27,10 @@ export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
     box-shadow: 0 6px 16px rgba(190,24,93,0.18);
     font-family: system-ui, -apple-system, sans-serif;
     font-weight: 800; font-size: 12px; color: #9D174D;
-    letter-spacing: 0.3px;
   }
-  .arrows {
-    display: flex; gap: 4px; padding-left: 6px;
-  }
+  .arrows { display: flex; gap: 4px; padding-left: 6px; }
   .arrows span {
-    display: inline-block;
-    color: #EC4899; font-size: 16px; font-weight: 900;
+    display: inline-block; color: #EC4899; font-size: 16px; font-weight: 900;
     animation: pulse 1s ease-in-out infinite;
   }
   .arrows span:nth-child(2) { animation-delay: 0.12s; }
@@ -68,21 +65,34 @@ let diceObjects = [];
 let needsResultCheck = false;
 let isRolling = false;
 let settleFrames = 0;
+let forceTimer = null;
+let resultPosted = false;
 
-// Zoomed-out stage, smaller dice
 const FRUSTUM_SIZE = 28;
 const WALL = 9.5;
 const CLAMP = 8.6;
 const BOX = 1.65;
 const IDLE_ORIGIN = { x: -5.2, z: 4.6, y: BOX / 2 + 0.08 };
+const FORCE_SETTLE_MS = 2600;
+
+// Camera-relative ground axes (camera at +X+Y+Z looking at origin)
+const CAM_RIGHT = new THREE.Vector3(0.707, 0, -0.707); // screen-right on table
+const CAM_FWD = new THREE.Vector3(-0.707, 0, -0.707);  // screen-up on table
 
 const palette = [
   "#F59E0B", "#EC4899", "#10B981", "#FBBF24",
   "#F472B6", "#34D399", "#FFFFFF", "#D97706"
 ];
 const commonColors = { dots: "#FFFFFF", outline: "#1E293B", shadow: "#F59E0B" };
-
 const hintEl = document.getElementById("hint");
+
+// Face normals in local mesh space matching material order
+const FACE_NORMALS = [
+  new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+  new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
+  new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+];
+const FACE_VALUES = [1, 6, 2, 5, 3, 4];
 
 function post(msg) {
   try {
@@ -121,17 +131,17 @@ function init() {
   document.body.appendChild(renderer.domElement);
 
   world = new CANNON.World();
-  world.gravity.set(0, -48, 0);
+  world.gravity.set(0, -52, 0);
   world.broadphase = new CANNON.NaiveBroadphase();
-  world.solver.iterations = 24;
+  world.solver.iterations = 28;
   world.allowSleep = true;
 
   const wallMat = new CANNON.Material("wall");
   const diceMat = new CANNON.Material("dice");
   world.addContactMaterial(
     new CANNON.ContactMaterial(wallMat, diceMat, {
-      friction: 0.4,
-      restitution: 0.38,
+      friction: 0.55,
+      restitution: 0.22,
     })
   );
 
@@ -206,7 +216,7 @@ function createVectorDiceTexture(number, colorHex) {
   return new THREE.CanvasTexture(canvas);
 }
 
-function placeIdle(body, i, count) {
+function placeIdle(body, i) {
   const col = i % 3;
   const row = Math.floor(i / 3);
   body.position.set(
@@ -222,6 +232,7 @@ function placeIdle(body, i, count) {
 
 function updateDiceCount(count) {
   count = Math.max(1, Math.min(6, count | 0));
+  clearForceTimer();
   diceObjects.forEach((obj) => {
     scene.remove(obj.mesh);
     scene.remove(obj.outline);
@@ -238,6 +249,7 @@ function updateDiceCount(count) {
   needsResultCheck = false;
   isRolling = false;
   settleFrames = 0;
+  resultPosted = false;
 
   const geometry = new RoundedBoxGeometry(BOX, BOX, BOX, 4, 0.32);
   const outlineGeo = geometry.clone();
@@ -280,11 +292,11 @@ function updateDiceCount(count) {
     const body = new CANNON.Body({
       mass: 4,
       shape,
-      sleepSpeedLimit: 0.35,
-      linearDamping: 0.14,
-      angularDamping: 0.16,
+      sleepSpeedLimit: 0.25,
+      linearDamping: 0.22,
+      angularDamping: 0.28,
     });
-    placeIdle(body, i, count);
+    placeIdle(body, i);
     world.addBody(body);
     diceObjects.push({ mesh, outline, shadow, body });
   }
@@ -293,20 +305,28 @@ function updateDiceCount(count) {
   post({ type: "idle" });
 }
 
-function applySwipeForce(body, dirX, dirZ, strength) {
-  const s = Math.max(0.45, Math.min(1.6, strength));
-  // Map screen swipe → table axes (isometric)
-  const vx = dirX * 18 * s + dirZ * 6 * s;
-  const vz = -dirX * 6 * s + dirZ * 16 * s;
+function clearForceTimer() {
+  if (forceTimer) {
+    clearTimeout(forceTimer);
+    forceTimer = null;
+  }
+}
+
+/** Map screen swipe → table plane using camera right/forward. */
+function applySwipeForce(body, sx, sy, strength) {
+  const s = Math.max(0.5, Math.min(1.75, strength));
+  // sx: screen-right (+), sy: screen-up (+)
+  const vx = CAM_RIGHT.x * sx * 20 * s + CAM_FWD.x * sy * 20 * s;
+  const vz = CAM_RIGHT.z * sx * 20 * s + CAM_FWD.z * sy * 20 * s;
   body.velocity.set(
-    vx + (Math.random() - 0.5) * 3,
-    7 + 6 * s + Math.random() * 3,
-    vz + (Math.random() - 0.5) * 3
+    vx + (Math.random() - 0.5) * 2,
+    6.5 + 5 * s + Math.random() * 2,
+    vz + (Math.random() - 0.5) * 2
   );
   body.angularVelocity.set(
-    (Math.random() - 0.5) * 30 * s,
-    (Math.random() - 0.5) * 30 * s,
-    (Math.random() - 0.5) * 30 * s
+    (Math.random() - 0.5) * 26 * s,
+    (Math.random() - 0.5) * 26 * s,
+    (Math.random() - 0.5) * 26 * s
   );
 }
 
@@ -315,51 +335,110 @@ function clampBody(body) {
   let z = body.position.z;
   let y = body.position.y;
   let hit = false;
-  if (x > CLAMP) { x = CLAMP; body.velocity.x *= -0.3; hit = true; }
-  if (x < -CLAMP) { x = -CLAMP; body.velocity.x *= -0.3; hit = true; }
-  if (z > CLAMP) { z = CLAMP; body.velocity.z *= -0.3; hit = true; }
-  if (z < -CLAMP) { z = -CLAMP; body.velocity.z *= -0.3; hit = true; }
-  if (y > 12) { y = 12; body.velocity.y *= -0.2; hit = true; }
+  if (x > CLAMP) { x = CLAMP; body.velocity.x *= -0.25; hit = true; }
+  if (x < -CLAMP) { x = -CLAMP; body.velocity.x *= -0.25; hit = true; }
+  if (z > CLAMP) { z = CLAMP; body.velocity.z *= -0.25; hit = true; }
+  if (z < -CLAMP) { z = -CLAMP; body.velocity.z *= -0.25; hit = true; }
+  if (y > 12) { y = 12; body.velocity.y *= -0.15; hit = true; }
   if (y < BOX / 2) y = BOX / 2;
   if (hit) body.position.set(x, y, z);
 }
 
+function bestFaceIndex(mesh) {
+  let maxDot = -Infinity;
+  let idx = 2; // default +Y
+  FACE_NORMALS.forEach((normal, index) => {
+    const worldNormal = normal.clone().applyQuaternion(mesh.quaternion);
+    if (worldNormal.y > maxDot) {
+      maxDot = worldNormal.y;
+      idx = index;
+    }
+  });
+  return idx;
+}
+
+/** Snap die so a face is perfectly flat on the table. */
+function snapFlat(obj) {
+  const idx = bestFaceIndex(obj.mesh);
+  const localUp = FACE_NORMALS[idx].clone();
+  // Quaternion that rotates localUp → world +Y
+  const q = new THREE.Quaternion().setFromUnitVectors(
+    localUp,
+    new THREE.Vector3(0, 1, 0)
+  );
+  // Preserve a bit of yaw from current for visual variety
+  const yaw = Math.atan2(
+    2 * (obj.mesh.quaternion.y * obj.mesh.quaternion.w),
+    1 - 2 * (obj.mesh.quaternion.y * obj.mesh.quaternion.y)
+  );
+  const yawQ = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    yaw * 0.15
+  );
+  q.premultiply(yawQ);
+
+  obj.body.velocity.set(0, 0, 0);
+  obj.body.angularVelocity.set(0, 0, 0);
+  obj.body.position.y = BOX / 2;
+  obj.body.quaternion.set(q.x, q.y, q.z, q.w);
+  obj.mesh.quaternion.copy(q);
+  obj.mesh.position.copy(obj.body.position);
+  obj.outline.quaternion.copy(q);
+  obj.outline.position.copy(obj.mesh.position);
+  obj.body.sleep();
+}
+
+function forceSettleAll() {
+  if (resultPosted) return;
+  diceObjects.forEach(snapFlat);
+  finishResult();
+}
+
 function castSwipe(dx, dy, speed) {
   if (isRolling) return;
-  // Normalize direction from screen delta (right+, down+)
   const len = Math.hypot(dx, dy) || 1;
-  const dirX = dx / len;
-  const dirY = dy / len;
-  // Up-swipe on screen → positive table throw
-  const dirZ = -dirY;
+  // sx right+, sy up+ (flip screen Y)
+  const sx = dx / len;
+  const sy = -dy / len;
   const strength = Math.max(0.5, Math.min(1.7, speed / 900));
 
   isRolling = true;
   needsResultCheck = false;
   settleFrames = 0;
+  resultPosted = false;
   setHintVisible(false);
   post({ type: "rolling" });
+  clearForceTimer();
 
-  diceObjects.forEach((obj, i) => {
+  diceObjects.forEach((obj) => {
     const body = obj.body;
     body.wakeUp();
-    // Slight stagger from idle cluster
-    body.position.x += (Math.random() - 0.5) * 0.4;
-    body.position.y = Math.max(body.position.y, BOX + 0.5);
-    body.position.z += (Math.random() - 0.5) * 0.4;
-    applySwipeForce(body, dirX + (Math.random() - 0.5) * 0.15, dirZ + (Math.random() - 0.5) * 0.15, strength);
+    body.position.x += (Math.random() - 0.5) * 0.35;
+    body.position.y = Math.max(body.position.y, BOX + 0.6);
+    body.position.z += (Math.random() - 0.5) * 0.35;
+    applySwipeForce(
+      body,
+      sx + (Math.random() - 0.5) * 0.1,
+      sy + (Math.random() - 0.5) * 0.1,
+      strength
+    );
   });
 
   setTimeout(() => {
     needsResultCheck = true;
-  }, 500);
+  }, 450);
+
+  // Guaranteed finish — never stuck on a tipped die
+  forceTimer = setTimeout(forceSettleAll, FORCE_SETTLE_MS);
 }
 
 function resetTable() {
+  clearForceTimer();
   needsResultCheck = false;
   isRolling = false;
   settleFrames = 0;
-  diceObjects.forEach((obj, i) => placeIdle(obj.body, i, diceObjects.length));
+  resultPosted = false;
+  diceObjects.forEach((obj, i) => placeIdle(obj.body, i));
   setHintVisible(true);
   post({ type: "idle" });
 }
@@ -367,49 +446,28 @@ function resetTable() {
 function isSettledFlat(body, mesh) {
   const lin = body.velocity.lengthSquared();
   const ang = body.angularVelocity.lengthSquared();
-  if (lin > 0.08 || ang > 0.08) return false;
-  if (body.position.y > BOX / 2 + 0.35) return false;
-
-  // Face nearly axis-aligned with world up
-  const faceNormals = [
-    new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
-    new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
-  ];
-  let maxY = -Infinity;
-  faceNormals.forEach((n) => {
-    const w = n.clone().applyQuaternion(mesh.quaternion);
-    if (w.y > maxY) maxY = w.y;
-  });
-  return maxY > 0.92;
+  if (lin > 0.06 || ang > 0.06) return false;
+  if (body.position.y > BOX / 2 + 0.28) return false;
+  const idx = bestFaceIndex(mesh);
+  const up = FACE_NORMALS[idx].clone().applyQuaternion(mesh.quaternion);
+  return up.y > 0.94;
 }
 
-function calculateResult() {
-  let total = 0;
-  const details = [];
-  const faceNormals = [
-    new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
-    new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
-  ];
-  const faceValues = [1, 6, 2, 5, 3, 4];
-
-  diceObjects.forEach(({ mesh }) => {
-    let maxDot = -Infinity;
-    let resultValue = 1;
-    faceNormals.forEach((normal, index) => {
-      const worldNormal = normal.clone().applyQuaternion(mesh.quaternion);
-      if (worldNormal.y > maxDot) {
-        maxDot = worldNormal.y;
-        resultValue = faceValues[index];
-      }
-    });
-    total += resultValue;
-    details.push(resultValue);
-  });
-
+function finishResult() {
+  if (resultPosted) return;
+  resultPosted = true;
   needsResultCheck = false;
   isRolling = false;
+  clearForceTimer();
+
+  let total = 0;
+  const details = [];
+  diceObjects.forEach(({ mesh }) => {
+    const idx = bestFaceIndex(mesh);
+    const v = FACE_VALUES[idx];
+    total += v;
+    details.push(v);
+  });
   post({ type: "result", total, details });
 }
 
@@ -430,7 +488,7 @@ function bindSwipe() {
     const dy = y - startY;
     const dt = Math.max(16, performance.now() - startT);
     const dist = Math.hypot(dx, dy);
-    if (dist < 28) return;
+    if (dist < 24) return;
     const speed = (dist / dt) * 1000;
     castSwipe(dx, dy, speed);
   };
@@ -464,7 +522,7 @@ function animate() {
     shadow.material.opacity = Math.max(0, 0.2 - height * 0.01);
   }
 
-  if (needsResultCheck) {
+  if (needsResultCheck && !resultPosted) {
     let allFlat = true;
     for (const o of diceObjects) {
       if (!isSettledFlat(o.body, o.mesh)) {
@@ -474,8 +532,10 @@ function animate() {
     }
     if (allFlat) {
       settleFrames += 1;
-      // Require a few stable frames so they truly sit flat
-      if (settleFrames >= 8) calculateResult();
+      if (settleFrames >= 6) {
+        diceObjects.forEach(snapFlat);
+        finishResult();
+      }
     } else {
       settleFrames = 0;
     }
