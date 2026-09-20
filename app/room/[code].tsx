@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  useColorScheme,
   Pressable,
   FlatList,
   ActivityIndicator,
@@ -24,19 +22,17 @@ import {
 } from '../../src/components/wheel/WafflrWheel';
 import { ConfettiBurst } from '../../src/components/celebration/ConfettiBurst';
 import { LobbyPicker } from '../../src/components/lobby/LobbyPicker';
+import { PlayChrome } from '../../src/components/play/PlayChrome';
+import { AdBanner } from '../../src/components/ads/AdBanner';
 import { getCatalogItems, type CatalogId, type CatalogItem } from '../../src/data/catalogs';
 import { type PlayableMode, modesForPlayerCount } from '../../src/constants/game-modes';
 import { colors } from '../../src/theme/colors';
-import { spacing, radius } from '../../src/theme/tokens';
+import { neu } from '../../src/theme/neumorph';
+import { spacing } from '../../src/theme/tokens';
+import { roomStyles as styles } from '../../src/screens/roomStyles';
 
 export default function RoomScreen() {
   const { code: routeCode } = useLocalSearchParams<{ code: string }>();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const bg = isDark ? colors.canvas.dark : colors.canvas.light;
-  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
-  const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
-  const cardBg = isDark ? colors.brand.slate[800] : colors.brand.slate[100];
 
   const {
     room,
@@ -149,9 +145,7 @@ export default function RoomScreen() {
     const id = wheelState.current_winner_id;
     const items = room.item_payload as CatalogItem[] | undefined;
     const item = items?.find((i) => i.id === id);
-    if (item) {
-      return { id, name: item.title, emoji: item.emoji };
-    }
+    if (item) return { id, name: item.title, emoji: item.emoji };
     const p = room.participants.find((x) => x.id === id);
     if (p) {
       return {
@@ -218,19 +212,15 @@ export default function RoomScreen() {
     }
     const items = getCatalogItems(catalogId);
     try {
-      if (modeId === 'swipe_match') {
-        await startGame(items);
-      } else if (modeId === 'wheel') {
-        await startGroupWheel(items);
-      }
+      if (modeId === 'swipe_match') await startGame(items);
+      else if (modeId === 'wheel') await startGroupWheel(items);
     } finally {
       setStarting(false);
     }
   };
 
   const onWheelSpinEnd = async () => {
-    if (!isHost) return;
-    if (completingRef.current) return;
+    if (!isHost || completingRef.current) return;
     completingRef.current = true;
     try {
       await completeWheelSpin();
@@ -239,15 +229,14 @@ export default function RoomScreen() {
     }
   };
 
-  const readyCount =
-    room?.participants.filter((p) => p.is_ready).length ?? 0;
+  const readyCount = room?.participants.filter((p) => p.is_ready).length ?? 0;
   const total = room?.participants.length ?? 0;
 
   const renderParticipant = ({ item }: { item: Participant }) => {
     const isSelfRow = item.id === selfId;
     const wins = wheelState?.tallies[item.id];
     return (
-      <View style={[styles.participantRow, { backgroundColor: cardBg }]}>
+      <View style={styles.participantRow}>
         <View style={styles.participantLeft}>
           <View
             style={[
@@ -264,11 +253,11 @@ export default function RoomScreen() {
             </Text>
           </View>
           <View>
-            <Text style={[styles.name, { color: text }]}>
+            <Text style={styles.name}>
               {item.display_name}
               {isSelfRow ? ' (you)' : ''}
             </Text>
-            <Text style={[styles.meta, { color: muted }]}>
+            <Text style={styles.meta}>
               {item.is_host ? 'Host' : 'Guest'}
               {typeof wins === 'number'
                 ? ` · ${wins} win${wins === 1 ? '' : 's'}`
@@ -279,19 +268,13 @@ export default function RoomScreen() {
         <View
           style={[
             styles.readyPill,
-            {
-              backgroundColor: item.is_ready
-                ? colors.brand.emerald[500]
-                : isDark
-                  ? colors.brand.slate[700]
-                  : colors.brand.slate[200],
-            },
+            item.is_ready ? styles.readyPillOn : styles.readyPillOff,
           ]}
         >
           <Text
             style={[
               styles.readyPillText,
-              { color: item.is_ready ? '#fff' : muted },
+              item.is_ready ? styles.readyPillTextOn : styles.readyPillTextOff,
             ]}
           >
             {item.is_ready ? 'Ready' : 'Waiting'}
@@ -303,7 +286,7 @@ export default function RoomScreen() {
 
   if (!room && isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.body}>
           <ActivityIndicator color={colors.brand.amber[500]} size="large" />
         </View>
@@ -313,19 +296,21 @@ export default function RoomScreen() {
 
   if (!room) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PlayChrome title="Room" subtitle="Not found" />
         <View style={styles.body}>
-          <Text style={[styles.title, { color: text }]}>Room not found</Text>
-          <Text style={[styles.hint, { color: muted }]}>
-            This code is not active. Ask the host for a fresh code, or create
-            your own room.
+          <Text style={styles.title}>Room not found</Text>
+          <Text style={styles.hint}>
+            This code is not active. Ask the host for a fresh code, or create your
+            own room.
           </Text>
           <Pressable onPress={() => router.replace('/')} style={styles.back}>
-            <Text style={{ color: colors.brand.amber[500], fontSize: 16 }}>
+            <Text style={{ color: colors.brand.amber[600], fontSize: 16, fontWeight: '800' }}>
               ← Home
             </Text>
           </Pressable>
         </View>
+        <AdBanner />
       </SafeAreaView>
     );
   }
@@ -335,49 +320,28 @@ export default function RoomScreen() {
       wheelState.phase === 'celebration' || room.status === 'revealing';
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PlayChrome title="Group Wheel" subtitle={code} />
         <ConfettiBurst active={celebrating && !!winnerDisplay} />
 
         {celebrating && winnerDisplay ? (
           <View style={styles.winnerOverlay} pointerEvents="box-none">
-            <View
-              style={[
-                styles.winnerCard,
-                {
-                  backgroundColor: isDark
-                    ? colors.brand.slate[800]
-                    : '#fff',
-                  borderColor: colors.brand.emerald[500],
-                },
-              ]}
-            >
+            <View style={styles.winnerCard}>
               <Text style={styles.winnerCardEmoji}>{winnerDisplay.emoji}</Text>
-              <Text
-                style={[
-                  styles.winnerCardName,
-                  { color: colors.brand.emerald[500] },
-                ]}
-              >
-                {winnerDisplay.name}
-              </Text>
-              <Text style={[styles.winnerCardSub, { color: muted }]}>
-                wins this round
-              </Text>
+              <Text style={styles.winnerCardName}>{winnerDisplay.name}</Text>
+              <Text style={styles.winnerCardSub}>wins this round</Text>
               {isHost ? (
                 <Pressable
                   onPress={() => void nextWheelSpin()}
                   style={({ pressed }) => [
                     styles.winnerCardBtn,
-                    {
-                      backgroundColor: colors.brand.emerald[500],
-                      opacity: pressed ? 0.9 : 1,
-                    },
+                    { opacity: pressed ? 0.9 : 1 },
                   ]}
                 >
                   <Text style={styles.winnerCardBtnText}>Spin again</Text>
                 </Pressable>
               ) : (
-                <Text style={[styles.startHint, { color: muted, marginTop: spacing[3] }]}>
+                <Text style={[styles.startHint, { marginTop: spacing[3] }]}>
                   Waiting for host…
                 </Text>
               )}
@@ -389,22 +353,22 @@ export default function RoomScreen() {
           contentContainerStyle={styles.wheelScroll}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.label, { color: muted }]}>{code}</Text>
-          <Text style={[styles.swipeTitle, { color: text }]}>Group Wheel</Text>
-          <Text style={[styles.hint, { color: muted, marginBottom: spacing[3] }]}>
+          <Text style={[styles.hint, { marginBottom: spacing[3] }]}>
             Spin the catalog · host spins
           </Text>
 
-          <WafflrWheel
-            segments={wheelSegments}
-            size={280}
-            hideSpinButton
-            hideResult
-            externalSpin={externalSpin}
-            onSpinEnd={() => {
-              void onWheelSpinEnd();
-            }}
-          />
+          <View style={styles.stage}>
+            <WafflrWheel
+              segments={wheelSegments}
+              size={280}
+              hideSpinButton
+              hideResult
+              externalSpin={externalSpin}
+              onSpinEnd={() => {
+                void onWheelSpinEnd();
+              }}
+            />
+          </View>
 
           <View style={styles.wheelControls}>
             {isHost && wheelState.phase === 'ready' ? (
@@ -412,75 +376,43 @@ export default function RoomScreen() {
                 onPress={() => void hostSpinWheel()}
                 style={({ pressed }) => [
                   styles.primaryBtn,
-                  {
-                    backgroundColor: colors.brand.amber[500],
-                    opacity: pressed ? 0.9 : 1,
-                    width: '100%',
-                  },
+                  { opacity: pressed ? 0.9 : 1, width: '100%' },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.primaryBtnText,
-                    { color: colors.brand.slate[900] },
-                  ]}
-                >
-                  Spin the wheel
-                </Text>
+                <Text style={styles.primaryBtnText}>Spin the wheel</Text>
               </Pressable>
             ) : null}
 
             {wheelState.phase === 'spinning' ? (
-              <Text style={[styles.startHint, { color: muted }]}>Spinning…</Text>
+              <Text style={styles.startHint}>Spinning…</Text>
             ) : null}
 
             {!isHost && wheelState.phase === 'ready' ? (
-              <Text style={[styles.startHint, { color: muted }]}>
-                Waiting for host to spin…
-              </Text>
+              <Text style={styles.startHint}>Waiting for host to spin…</Text>
             ) : null}
           </View>
 
           <View style={styles.tallyBox}>
-            <Text style={[styles.tallySectionLabel, { color: muted }]}>
-              Scoreboard
-            </Text>
+            <Text style={styles.tallySectionLabel}>Scoreboard</Text>
             <View style={styles.tallyChips}>
               {tallyList.map((row) => (
-                <View
-                  key={row.id}
-                  style={[
-                    styles.tallyChip,
-                    {
-                      backgroundColor: isDark
-                        ? colors.brand.slate[800]
-                        : colors.brand.slate[100],
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.tallyChipName, { color: text }]}
-                    numberOfLines={1}
-                  >
+                <View key={row.id} style={styles.tallyChip}>
+                  <Text style={styles.tallyChipName} numberOfLines={1}>
                     {row.name}
                   </Text>
-                  <Text
-                    style={[
-                      styles.tallyChipWins,
-                      { color: colors.brand.amber[500] },
-                    ]}
-                  >
-                    {row.wins}
-                  </Text>
+                  <Text style={styles.tallyChipWins}>{row.wins}</Text>
                 </View>
               ))}
             </View>
           </View>
 
           <Pressable onPress={onLeave} style={[styles.back, { marginTop: spacing[4] }]}>
-            <Text style={{ color: muted, fontSize: 15 }}>Leave room</Text>
+            <Text style={{ color: neu.muted, fontSize: 15, fontWeight: '700' }}>
+              Leave room
+            </Text>
           </Pressable>
         </ScrollView>
+        <AdBanner />
       </SafeAreaView>
     );
   }
@@ -491,77 +423,61 @@ export default function RoomScreen() {
     matchedItem
   ) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PlayChrome title="Match!" subtitle={code} />
         <View style={styles.celebrate}>
           <Text style={styles.celebrateEmoji}>{matchedItem.emoji}</Text>
-          <Text
-            style={[
-              styles.celebrateTitle,
-              { color: colors.brand.emerald[500] },
-            ]}
-          >
-            It is a match!
-          </Text>
-          <Text style={[styles.celebrateItem, { color: text }]}>
-            {matchedItem.title}
-          </Text>
-          <Text style={[styles.hint, { color: muted }]}>
+          <Text style={styles.celebrateTitle}>It is a match!</Text>
+          <Text style={styles.celebrateItem}>{matchedItem.title}</Text>
+          <Text style={styles.hint}>
             Everyone agreed. Decision locked in under 60 seconds.
           </Text>
           <Pressable
             onPress={dismissMatch}
-            style={[
+            style={({ pressed }) => [
               styles.primaryBtn,
-              { backgroundColor: colors.brand.amber[500] },
+              { opacity: pressed ? 0.9 : 1 },
             ]}
           >
-            <Text
-              style={[
-                styles.primaryBtnText,
-                { color: colors.brand.slate[900] },
-              ]}
-            >
-              Keep swiping
-            </Text>
+            <Text style={styles.primaryBtnText}>Keep swiping</Text>
           </Pressable>
           <Pressable onPress={onLeave} style={styles.back}>
-            <Text style={{ color: muted, fontSize: 16 }}>Done · Leave room</Text>
+            <Text style={{ color: neu.muted, fontSize: 16, fontWeight: '700' }}>
+              Done · Leave room
+            </Text>
           </Pressable>
         </View>
+        <AdBanner />
       </SafeAreaView>
     );
   }
 
-  if (
-    room.status === 'active' &&
-    swipeState &&
-    swipeState.phase === 'swiping'
-  ) {
+  if (room.status === 'active' && swipeState && swipeState.phase === 'swiping') {
     if (!nextItem) {
       return (
-        <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+        <SafeAreaView style={styles.container} edges={['top']}>
+          <PlayChrome title="Swipe Match" subtitle={code} />
           <View style={styles.body}>
-            <Text style={[styles.title, { color: text }]}>
-              Waiting on others…
-            </Text>
-            <Text style={[styles.hint, { color: muted }]}>
+            <Text style={styles.title}>Waiting on others…</Text>
+            <Text style={styles.hint}>
               You finished the deck. Hang tight for a match.
             </Text>
             <Pressable onPress={onLeave} style={styles.back}>
-              <Text style={{ color: muted, fontSize: 16 }}>Leave room</Text>
+              <Text style={{ color: neu.muted, fontSize: 16, fontWeight: '700' }}>
+                Leave room
+              </Text>
             </Pressable>
           </View>
+          <AdBanner />
         </SafeAreaView>
       );
     }
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PlayChrome title="Swipe Match" subtitle={code} />
         <View style={styles.swipeHeader}>
-          <Text style={[styles.label, { color: muted }]}>{code}</Text>
-          <Text style={[styles.swipeTitle, { color: text }]}>
-            What are we getting?
-          </Text>
+          <Text style={styles.swipeTitle}>What are we getting?</Text>
         </View>
         <SwipeDeck
           key={nextItem.id}
@@ -576,44 +492,43 @@ export default function RoomScreen() {
             void castVeto(nextItem.id);
           }}
         />
+        <AdBanner />
       </SafeAreaView>
     );
   }
 
   if (room.status === 'completed' || swipeState?.phase === 'finished') {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PlayChrome title="Room" subtitle={code} />
         <View style={styles.body}>
-          <Text style={[styles.title, { color: text }]}>Session complete</Text>
-          <Text style={[styles.hint, { color: muted }]}>
+          <Text style={styles.title}>Session complete</Text>
+          <Text style={styles.hint}>
             {swipeState?.matches.length
               ? `Matches: ${swipeState.matches.length}`
               : 'No mutual matches this round.'}
           </Text>
           <Pressable onPress={onLeave} style={styles.back}>
-            <Text style={{ color: colors.brand.amber[500], fontSize: 16 }}>
+            <Text style={{ color: colors.brand.amber[600], fontSize: 16, fontWeight: '800' }}>
               ← Home
             </Text>
           </Pressable>
         </View>
+        <AdBanner />
       </SafeAreaView>
     );
   }
 
+  // Lobby
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <PlayChrome title="Room" subtitle={code} />
       <View style={styles.header}>
-        <Text style={[styles.label, { color: muted }]}>Room code</Text>
-        <Text style={[styles.code, { color: colors.brand.amber[500] }]}>
-          {code}
-        </Text>
-        <Text style={[styles.readySummary, { color: muted }]}>
+        <Text style={styles.code}>{code}</Text>
+        <Text style={styles.readySummary}>
           {readyCount}/{total} ready
-          {everyoneReady ? ' · Everyone is ready' : ''}
         </Text>
-        <Text style={[styles.live, { color: colors.brand.emerald[500] }]}>
-          ● Live
-        </Text>
+        <Text style={styles.live}>Live</Text>
       </View>
 
       <FlatList
@@ -622,323 +537,66 @@ export default function RoomScreen() {
         renderItem={renderParticipant}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <Text style={[styles.sectionLabel, { color: muted }]}>Players</Text>
+          <Text style={styles.sectionLabel}>Players</Text>
         }
       />
 
       <View style={styles.footer}>
-        {isHost ? (
-          <Pressable
-            onPress={onAddGuest}
-            style={({ pressed }) => [
-              styles.secondaryBtn,
-              {
-                borderColor: isDark ? colors.border.dark : colors.border.light,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.secondaryBtnText, { color: text }]}>
-              + Add demo guest
-            </Text>
-          </Pressable>
-        ) : null}
-
         <Pressable
-          onPress={onToggleReady}
+          onPress={() => void onToggleReady()}
           style={({ pressed }) => [
             styles.primaryBtn,
             {
               backgroundColor: self?.is_ready
-                ? colors.brand.slate[600]
-                : colors.brand.amber[500],
+                ? colors.brand.emerald[400]
+                : colors.brand.amber[400],
               opacity: pressed ? 0.9 : 1,
             },
           ]}
         >
-          <Text
-            style={[
-              styles.primaryBtnText,
-              {
-                color: self?.is_ready ? '#fff' : colors.brand.slate[900],
-              },
-            ]}
-          >
-            {self?.is_ready ? 'Not ready' : "I'm ready"}
+          <Text style={styles.primaryBtnText}>
+            {self?.is_ready ? 'Ready ✓' : 'I’m ready'}
           </Text>
         </Pressable>
 
         {isHost ? (
-          <LobbyPicker
-            playerCount={room.participants.length}
-            catalogId={catalogId}
-            modeId={modeId}
-            onCatalogChange={setCatalogId}
-            onModeChange={setModeId}
-            onStart={() => void onLobbyStart()}
-            canStart={everyoneReady || room.participants.length === 1}
-            starting={starting}
-          />
+          <Pressable
+            onPress={() => void onAddGuest()}
+            style={({ pressed }) => [
+              styles.secondaryBtn,
+              { opacity: pressed ? 0.9 : 1 },
+            ]}
+          >
+            <Text style={styles.secondaryBtnText}>Add guest seat</Text>
+          </Pressable>
+        ) : null}
+
+        {isHost ? (
+          <View style={styles.lobbyWrap}>
+            <LobbyPicker
+              playerCount={room.participants.length}
+              catalogId={catalogId}
+              modeId={modeId}
+              onCatalogChange={setCatalogId}
+              onModeChange={setModeId}
+              onStart={() => void onLobbyStart()}
+              canStart={everyoneReady || room.participants.length === 1}
+              starting={starting}
+            />
+          </View>
         ) : (
-          <Text style={[styles.startHint, { color: muted, textAlign: 'center' }]}>
+          <Text style={[styles.startHint, { textAlign: 'center' }]}>
             Waiting for host to pick a game…
           </Text>
         )}
 
         <Pressable onPress={onLeave} style={styles.back}>
-          <Text style={{ color: muted, fontSize: 16 }}>Leave room</Text>
+          <Text style={{ color: neu.muted, fontSize: 16, fontWeight: '700' }}>
+            Leave room
+          </Text>
         </Pressable>
       </View>
+      <AdBanner />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  body: {
-    flex: 1,
-    padding: spacing[6],
-    justifyContent: 'center',
-    gap: spacing[3],
-  },
-  header: {
-    paddingHorizontal: spacing[6],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[2],
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  code: {
-    fontSize: 36,
-    fontWeight: '800',
-    letterSpacing: 4,
-  },
-  readySummary: {
-    fontSize: 14,
-    marginTop: spacing[1],
-  },
-  live: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: spacing[1],
-  },
-  list: {
-    paddingHorizontal: spacing[6],
-    paddingBottom: spacing[4],
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: spacing[2],
-    marginTop: spacing[2],
-  },
-  participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing[3],
-    borderRadius: radius.lg,
-    marginBottom: spacing[2],
-  },
-  participantLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  meta: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  readyPill: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: radius.full,
-  },
-  readyPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  footer: {
-    padding: spacing[6],
-    gap: spacing[3],
-  },
-  primaryBtn: {
-    paddingVertical: spacing[4],
-    borderRadius: radius.xl,
-    alignItems: 'center',
-  },
-  primaryBtnText: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  secondaryBtn: {
-    borderWidth: 1.5,
-    paddingVertical: spacing[3],
-    borderRadius: radius.xl,
-    alignItems: 'center',
-  },
-  secondaryBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  back: {
-    alignItems: 'center',
-    paddingVertical: spacing[2],
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  hint: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  swipeHeader: {
-    paddingHorizontal: spacing[6],
-    paddingTop: spacing[4],
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  swipeTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  celebrate: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing[6],
-    gap: spacing[3],
-  },
-  celebrateEmoji: {
-    fontSize: 64,
-  },
-  celebrateTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  celebrateItem: {
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  wheelScroll: {
-    padding: spacing[6],
-    alignItems: 'center',
-    paddingBottom: spacing[10],
-  },
-  wheelControls: {
-    width: '100%',
-    marginTop: spacing[4],
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  winnerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-    paddingHorizontal: spacing[6],
-  },
-  winnerCard: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: radius['2xl'],
-    borderWidth: 2,
-    paddingVertical: spacing[8],
-    paddingHorizontal: spacing[6],
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  winnerCardEmoji: {
-    fontSize: 56,
-    marginBottom: spacing[2],
-  },
-  winnerCardName: {
-    fontSize: 26,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  winnerCardSub: {
-    fontSize: 15,
-    fontWeight: '500',
-    marginBottom: spacing[2],
-  },
-  winnerCardBtn: {
-    marginTop: spacing[4],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[8],
-    borderRadius: radius.full,
-  },
-  winnerCardBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  startHint: {
-    marginTop: spacing[1],
-    fontSize: 14,
-  },
-  tallyBox: {
-    width: '100%',
-    marginTop: spacing[5],
-  },
-  tallySectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: spacing[2],
-    textAlign: 'center',
-  },
-  tallyChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing[1],
-  },
-  tallyChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-    paddingVertical: 4,
-    paddingHorizontal: spacing[2],
-    borderRadius: radius.full,
-    maxWidth: '48%',
-  },
-  tallyChipName: {
-    fontSize: 12,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  tallyChipWins: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-});
