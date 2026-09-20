@@ -1,7 +1,6 @@
 /**
  * Three.js + Cannon-es dice table.
- * - Swipe mapped to camera-right / camera-forward on the table plane
- * - Always force-snaps dice flat if they don't settle (no stuck rolls)
+ * Felt noise floor, tight walls — dice stay in frame.
  */
 export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
 <html>
@@ -10,7 +9,7 @@ export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #FFF8EB; touch-action: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #145A40; touch-action: none; }
   canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   #hint {
     position: absolute; left: 14px; bottom: 16px;
@@ -68,25 +67,23 @@ let settleFrames = 0;
 let forceTimer = null;
 let resultPosted = false;
 
-const FRUSTUM_SIZE = 28;
-const WALL = 9.5;
-const CLAMP = 8.6;
+const FRUSTUM_SIZE = 24;
+const WALL = 7.2;
+const CLAMP = 6.5;
 const BOX = 1.65;
-const IDLE_ORIGIN = { x: -5.2, z: 4.6, y: BOX / 2 + 0.08 };
+const IDLE_ORIGIN = { x: -3.8, z: 3.2, y: BOX / 2 + 0.08 };
 const FORCE_SETTLE_MS = 2600;
 
-// Camera-relative ground axes (camera at +X+Y+Z looking at origin)
-const CAM_RIGHT = new THREE.Vector3(0.707, 0, -0.707); // screen-right on table
-const CAM_FWD = new THREE.Vector3(-0.707, 0, -0.707);  // screen-up on table
+const CAM_RIGHT = new THREE.Vector3(0.707, 0, -0.707);
+const CAM_FWD = new THREE.Vector3(-0.707, 0, -0.707);
 
 const palette = [
   "#F59E0B", "#EC4899", "#10B981", "#FBBF24",
   "#F472B6", "#34D399", "#FFFFFF", "#D97706"
 ];
-const commonColors = { dots: "#FFFFFF", outline: "#1E293B", shadow: "#F59E0B" };
+const commonColors = { dots: "#FFFFFF", outline: "#1E293B", shadow: "#0a2e22" };
 const hintEl = document.getElementById("hint");
 
-// Face normals in local mesh space matching material order
 const FACE_NORMALS = [
   new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
   new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
@@ -108,9 +105,53 @@ function setHintVisible(v) {
   else hintEl.classList.add("hide");
 }
 
+function createFeltTexture() {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const g = ctx.createRadialGradient(size/2, size/2, 20, size/2, size/2, size*0.75);
+  g.addColorStop(0, "#2D8A64");
+  g.addColorStop(0.55, "#1B6B4A");
+  g.addColorStop(1, "#0F4530");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const img = ctx.getImageData(0, 0, size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 32;
+    img.data[i] = Math.max(0, Math.min(255, img.data[i] + n * 0.7));
+    img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n));
+    img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n * 0.55));
+  }
+  ctx.putImageData(img, 0, 0);
+  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  for (let i = 0; i < 40; i++) {
+    ctx.beginPath();
+    ctx.moveTo(Math.random() * size, 0);
+    ctx.lineTo(Math.random() * size, size);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  return tex;
+}
+
+function addFeltFloor() {
+  const geo = new THREE.PlaneGeometry(48, 48);
+  const mat = new THREE.MeshBasicMaterial({ map: createFeltTexture() });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = 0.001;
+  scene.add(mesh);
+}
+
 function init() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color("#FFF8EB");
+  scene.background = new THREE.Color("#145A40");
+  addFeltFloor();
 
   const aspect = window.innerWidth / Math.max(1, window.innerHeight);
   camera = new THREE.OrthographicCamera(
@@ -262,7 +303,7 @@ function updateDiceCount(count) {
   const shadowMat = new THREE.MeshBasicMaterial({
     color: commonColors.shadow,
     transparent: true,
-    opacity: 0.2,
+    opacity: 0.35,
   });
 
   for (let i = 0; i < count; i++) {
@@ -312,12 +353,10 @@ function clearForceTimer() {
   }
 }
 
-/** Map screen swipe → table plane using camera right/forward. */
 function applySwipeForce(body, sx, sy, strength) {
   const s = Math.max(0.5, Math.min(1.75, strength));
-  // sx: screen-right (+), sy: screen-up (+)
-  const vx = CAM_RIGHT.x * sx * 20 * s + CAM_FWD.x * sy * 20 * s;
-  const vz = CAM_RIGHT.z * sx * 20 * s + CAM_FWD.z * sy * 20 * s;
+  const vx = CAM_RIGHT.x * sx * 14 * s + CAM_FWD.x * sy * 14 * s;
+  const vz = CAM_RIGHT.z * sx * 14 * s + CAM_FWD.z * sy * 14 * s;
   body.velocity.set(
     vx + (Math.random() - 0.5) * 2,
     6.5 + 5 * s + Math.random() * 2,
@@ -335,18 +374,21 @@ function clampBody(body) {
   let z = body.position.z;
   let y = body.position.y;
   let hit = false;
-  if (x > CLAMP) { x = CLAMP; body.velocity.x *= -0.25; hit = true; }
-  if (x < -CLAMP) { x = -CLAMP; body.velocity.x *= -0.25; hit = true; }
-  if (z > CLAMP) { z = CLAMP; body.velocity.z *= -0.25; hit = true; }
-  if (z < -CLAMP) { z = -CLAMP; body.velocity.z *= -0.25; hit = true; }
-  if (y > 12) { y = 12; body.velocity.y *= -0.15; hit = true; }
+  if (x > CLAMP) { x = CLAMP; body.velocity.x = -Math.abs(body.velocity.x) * 0.35; hit = true; }
+  if (x < -CLAMP) { x = -CLAMP; body.velocity.x = Math.abs(body.velocity.x) * 0.35; hit = true; }
+  if (z > CLAMP) { z = CLAMP; body.velocity.z = -Math.abs(body.velocity.z) * 0.35; hit = true; }
+  if (z < -CLAMP) { z = -CLAMP; body.velocity.z = Math.abs(body.velocity.z) * 0.35; hit = true; }
+  if (y > 10) { y = 10; body.velocity.y = -Math.abs(body.velocity.y) * 0.2; hit = true; }
   if (y < BOX / 2) y = BOX / 2;
-  if (hit) body.position.set(x, y, z);
+  if (hit) {
+    body.position.set(x, y, z);
+    body.angularVelocity.scale(0.85);
+  }
 }
 
 function bestFaceIndex(mesh) {
   let maxDot = -Infinity;
-  let idx = 2; // default +Y
+  let idx = 2;
   FACE_NORMALS.forEach((normal, index) => {
     const worldNormal = normal.clone().applyQuaternion(mesh.quaternion);
     if (worldNormal.y > maxDot) {
@@ -357,16 +399,13 @@ function bestFaceIndex(mesh) {
   return idx;
 }
 
-/** Snap die so a face is perfectly flat on the table. */
 function snapFlat(obj) {
   const idx = bestFaceIndex(obj.mesh);
   const localUp = FACE_NORMALS[idx].clone();
-  // Quaternion that rotates localUp → world +Y
   const q = new THREE.Quaternion().setFromUnitVectors(
     localUp,
     new THREE.Vector3(0, 1, 0)
   );
-  // Preserve a bit of yaw from current for visual variety
   const yaw = Math.atan2(
     2 * (obj.mesh.quaternion.y * obj.mesh.quaternion.w),
     1 - 2 * (obj.mesh.quaternion.y * obj.mesh.quaternion.y)
@@ -397,7 +436,6 @@ function forceSettleAll() {
 function castSwipe(dx, dy, speed) {
   if (isRolling) return;
   const len = Math.hypot(dx, dy) || 1;
-  // sx right+, sy up+ (flip screen Y)
   const sx = dx / len;
   const sy = -dy / len;
   const strength = Math.max(0.5, Math.min(1.7, speed / 900));
@@ -424,11 +462,7 @@ function castSwipe(dx, dy, speed) {
     );
   });
 
-  setTimeout(() => {
-    needsResultCheck = true;
-  }, 450);
-
-  // Guaranteed finish — never stuck on a tipped die
+  setTimeout(() => { needsResultCheck = true; }, 450);
   forceTimer = setTimeout(forceSettleAll, FORCE_SETTLE_MS);
 }
 
@@ -519,7 +553,7 @@ function animate() {
     shadow.position.z = body.position.z;
     const height = Math.max(0, body.position.y - 1);
     shadow.scale.setScalar(Math.max(0.5, 1 - height * 0.04));
-    shadow.material.opacity = Math.max(0, 0.2 - height * 0.01);
+    shadow.material.opacity = Math.max(0, 0.35 - height * 0.01);
   }
 
   if (needsResultCheck && !resultPosted) {
