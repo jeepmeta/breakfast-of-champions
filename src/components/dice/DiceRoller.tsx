@@ -16,7 +16,7 @@ export function DiceRoller({
   count = 2,
   onCountConsumed,
 }: {
-  count?: debCount;
+  count?: DiceCount;
   onCountConsumed?: () => void;
 }) {
   const webRef = useRef<WebView>(null);
