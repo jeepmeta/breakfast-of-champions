@@ -19,6 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { NeuSurface } from '../ui/NeuSurface';
+import { InstantPressable } from '../../navigation/InstantPressable';
 import { colors } from '../../theme/colors';
 import { neu, affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
@@ -207,16 +208,11 @@ export function DiceResultPopup({
               ) : null}
             </View>
 
+            {/* Button sits above bottom pips */}
             <Animated.View style={[styles.actions, btnStyle]}>
-              <Pressable
-                onPress={onDismiss}
-                style={({ pressed }) => [
-                  styles.btnPrimary,
-                  { opacity: pressed ? 0.9 : 1 },
-                ]}
-              >
+              <InstantPressable onPress={onDismiss} style={styles.btnPrimary}>
                 <Text style={styles.btnPrimaryText}>{cheer}</Text>
-              </Pressable>
+              </InstantPressable>
             </Animated.View>
           </NeuSurface>
         </Animated.View>
@@ -226,7 +222,7 @@ export function DiceResultPopup({
 }
 
 const CARD_W = 220;
-const CARD_H = 320;
+const CARD_H = 340;
 
 const styles = StyleSheet.create({
   root: {
@@ -249,8 +245,10 @@ const styles = StyleSheet.create({
   },
   cardFace: {
     flex: 1,
-    paddingVertical: spacing[4],
+    paddingTop: spacing[4],
     paddingHorizontal: spacing[3],
+    // Leave room above bottom pips for the CTA
+    paddingBottom: 56,
   },
   cornerTL: {
     position: 'absolute',
@@ -261,7 +259,7 @@ const styles = StyleSheet.create({
   },
   cornerBR: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 10,
     right: 12,
     alignItems: 'center',
     zIndex: 2,
@@ -297,6 +295,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     zIndex: 2,
+    paddingBottom: spacing[2],
   },
   badge: {
     fontSize: 11,
@@ -318,8 +317,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
   },
   actions: {
-    zIndex: 2,
+    zIndex: 3,
     paddingHorizontal: spacing[2],
+    marginBottom: spacing[1],
   },
   btnPrimary: {
     backgroundColor: affect.delight.solid,

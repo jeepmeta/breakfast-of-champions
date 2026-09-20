@@ -22,8 +22,9 @@ import {
   playWheelOptions,
   roomFromLeftOptions,
   roomFromRightOptions,
+  profileOptions,
+  settingsOptions,
   modalOptions,
-  fromRightOptions,
 } from '../src/navigation/transitions';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -56,6 +57,7 @@ export default function RootLayout() {
             <StatusBar style="dark" />
             <Stack screenOptions={stackScreenDefaults}>
               <Stack.Screen name="index" options={{ animation: 'none' }} />
+              {/* Home grid columns: L Dice/Room/Profile · R Wheel/Bracket/Settings */}
               <Stack.Screen name="play/dice" options={playDiceOptions} />
               <Stack.Screen name="play/wheel" options={playWheelOptions} />
               <Stack.Screen name="room/[code]" options={roomFromLeftOptions} />
@@ -63,10 +65,9 @@ export default function RootLayout() {
                 name="bracket/[code]"
                 options={roomFromRightOptions}
               />
-              <Stack.Screen name="profile" options={fromRightOptions} />
-              <Stack.Screen name="settings" options={fromRightOptions} />
+              <Stack.Screen name="profile" options={profileOptions} />
+              <Stack.Screen name="settings" options={settingsOptions} />
               <Stack.Screen name="solo/wheel" options={modalOptions} />
-              {/* Legacy tab group — redirect only */}
               <Stack.Screen
                 name="(tabs)"
                 options={{ animation: 'none', headerShown: false }}
