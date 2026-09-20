@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { CATALOGS, type CatalogId } from '../../data/catalogs';
@@ -9,6 +9,14 @@ import {
   type ModeDef,
 } from '../../constants/game-modes';
 import { colors } from '../../theme/colors';
+import {
+  neu,
+  neuCard,
+  neuPill,
+  neuPrimaryBtn,
+  neuPrimaryBtnText,
+  neuSection,
+} from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 
 type Props = {
@@ -32,31 +40,24 @@ export function LobbyPicker({
   canStart,
   starting = false,
 }: Props) {
-  const isDark = useColorScheme() === 'dark';
-  const text = isDark ? colors.text.primary.dark : colors.text.primary.light;
-  const muted = isDark ? colors.text.muted.dark : colors.text.muted.light;
-  const cardBg = isDark ? colors.brand.slate[800] : colors.brand.slate[100];
-  const border = isDark ? colors.border.dark : colors.border.light;
-
   const modes = modesForPlayerCount(playerCount);
   const selectedMode = modes.find((m) => m.id === modeId) ?? modes[0];
 
-  const tap = async (fn: () => void) => {
-    try {
-      await Haptics.selectionAsync();
-    } catch {
-      // ignore
-    }
+  const tap = (fn: () => void) => {
+    void Haptics.selectionAsync().catch(() => undefined);
     fn();
   };
 
   return (
     <View style={styles.root}>
-      <Text style={[styles.tier, { color: muted }]}>
-        {tierLabel(playerCount)} · {playerCount} player{playerCount === 1 ? '' : 's'}
-      </Text>
+      <View style={styles.tierPill}>
+        <Text style={styles.tierText}>
+          {tierLabel(playerCount)} · {playerCount} player
+          {playerCount === 1 ? '' : 's'}
+        </Text>
+      </View>
 
-      <Text style={[styles.section, { color: muted }]}>What are we deciding?</Text>
+      <Text style={styles.section}>What are we deciding?</Text>
       <View style={styles.row}>
         {CATALOGS.map((c) => {
           const active = c.id === catalogId;
@@ -64,21 +65,14 @@ export function LobbyPicker({
             <Pressable
               key={c.id}
               onPress={() => tap(() => onCatalogChange(c.id))}
-              style={[
+              style={({ pressed }) => [
                 styles.chip,
-                {
-                  backgroundColor: active ? colors.brand.amber[500] : cardBg,
-                  borderColor: active ? colors.brand.amber[500] : border,
-                },
+                active && styles.chipActive,
+                { opacity: pressed ? 0.9 : 1 },
               ]}
             >
               <Text style={styles.chipEmoji}>{c.emoji}</Text>
-              <Text
-                style={[
-                  styles.chipLabel,
-                  { color: active ? colors.brand.slate[900] : text },
-                ]}
-              >
+              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
                 {c.label}
               </Text>
             </Pressable>
@@ -86,7 +80,7 @@ export function LobbyPicker({
         })}
       </View>
 
-      <Text style={[styles.section, { color: muted, marginTop: spacing[4] }]}>
+      <Text style={[styles.section, { marginTop: spacing[4] }]}>
         How do we decide?
       </Text>
       <View style={styles.modeGrid}>
@@ -100,22 +94,16 @@ export function LobbyPicker({
                 if (locked) return;
                 tap(() => onModeChange(m.id));
               }}
-              style={[
+              style={({ pressed }) => [
                 styles.modeCard,
-                {
-                  backgroundColor: active ? colors.brand.emerald[500] + '22' : cardBg,
-                  borderColor: active
-                    ? colors.brand.emerald[500]
-                    : border,
-                  opacity: locked ? 0.45 : 1,
-                },
+                active && styles.modeCardActive,
+                locked && styles.modeLocked,
+                { opacity: pressed && !locked ? 0.92 : 1 },
               ]}
             >
               <Text style={styles.modeEmoji}>{m.emoji}</Text>
-              <Text style={[styles.modeLabel, { color: text }]}>{m.label}</Text>
-              <Text style={[styles.modeBlurb, { color: muted }]}>
-                {locked ? 'Soon' : m.blurb}
-              </Text>
+              <Text style={styles.modeLabel}>{m.label}</Text>
+              <Text style={styles.modeBlurb}>{locked ? 'Soon' : m.blurb}</Text>
             </Pressable>
           );
         })}
@@ -127,8 +115,12 @@ export function LobbyPicker({
         style={({ pressed }) => [
           styles.startBtn,
           {
-            backgroundColor: colors.brand.amber[500],
-            opacity: !canStart || starting || !selectedMode?.ready ? 0.5 : pressed ? 0.9 : 1,
+            opacity:
+              !canStart || starting || !selectedMode?.ready
+                ? 0.5
+                : pressed
+                  ? 0.9
+                  : 1,
           },
         ]}
       >
@@ -148,18 +140,21 @@ const styles = StyleSheet.create({
   root: {
     gap: spacing[2],
   },
-  tier: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+  tierPill: {
+    ...neuPill,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
     marginBottom: spacing[1],
   },
-  section: {
+  tierText: {
     fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    fontWeight: '800',
+    color: colors.brand.amber[700],
+    letterSpacing: 0.3,
+  },
+  section: {
+    ...neuSection,
     marginBottom: spacing[2],
   },
   row: {
@@ -168,54 +163,72 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   chip: {
+    ...neuPill,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[1],
     paddingVertical: spacing[2],
     paddingHorizontal: spacing[3],
-    borderRadius: radius.full,
-    borderWidth: 1.5,
+  },
+  chipActive: {
+    backgroundColor: colors.brand.amber[400],
+    borderColor: colors.brand.amber[500],
+    shadowColor: colors.brand.amber[800],
+    shadowOpacity: 0.2,
   },
   chipEmoji: {
     fontSize: 16,
   },
   chipLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: neu.text,
+  },
+  chipLabelActive: {
+    color: colors.brand.slate[900],
   },
   modeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing[2],
+    gap: spacing[3],
   },
   modeCard: {
+    ...neuCard,
     width: '47%',
     minWidth: 140,
     flexGrow: 1,
     padding: spacing[3],
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    gap: 2,
+    gap: 4,
+  },
+  modeCardActive: {
+    borderColor: colors.brand.emerald[400],
+    backgroundColor: '#ECFDF5',
+    shadowColor: colors.brand.emerald[700],
+    shadowOpacity: 0.15,
+  },
+  modeLocked: {
+    opacity: 0.45,
   },
   modeEmoji: {
-    fontSize: 22,
+    fontSize: 24,
   },
   modeLabel: {
     fontSize: 15,
     fontWeight: '800',
+    color: neu.text,
   },
   modeBlurb: {
     fontSize: 12,
+    fontWeight: '600',
+    color: neu.muted,
+    lineHeight: 16,
   },
   startBtn: {
+    ...neuPrimaryBtn,
     marginTop: spacing[3],
-    paddingVertical: spacing[4],
-    borderRadius: radius.xl,
-    alignItems: 'center',
   },
   startBtnText: {
-    color: colors.brand.slate[900],
+    ...neuPrimaryBtnText,
     fontSize: 17,
-    fontWeight: '800',
   },
 });

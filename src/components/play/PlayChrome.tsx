@@ -4,23 +4,27 @@ import * as Haptics from 'expo-haptics';
 
 import { WafflrMark } from '../brand';
 import { colors } from '../../theme/colors';
-import { neu } from '../../theme/neumorph';
-import { spacing, radius } from '../../theme/tokens';
+import { neu, neuPill } from '../../theme/neumorph';
+import { spacing } from '../../theme/tokens';
 
 type Props = {
   title: string;
-  /** Optional accent under the title */
   subtitle?: string;
+  /** Optional right-side action instead of Back */
+  rightLabel?: string;
+  onRightPress?: () => void;
 };
 
-/**
- * Shared top bar for Dice / Wheel — mark + game name + back pill.
- */
-export function PlayChrome({ title, subtitle }: Props) {
+/** Shared top bar — mark + title + back/action pill. */
+export function PlayChrome({ title, subtitle, rightLabel, onRightPress }: Props) {
   const goBack = () => {
     void Haptics.selectionAsync().catch(() => undefined);
+    if (onRightPress && rightLabel) {
+      onRightPress();
+      return;
+    }
     if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)');
+    else router.replace('/');
   };
 
   return (
@@ -44,9 +48,9 @@ export function PlayChrome({ title, subtitle }: Props) {
         hitSlop={10}
         style={({ pressed }) => [styles.backPill, { opacity: pressed ? 0.85 : 1 }]}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={rightLabel ?? 'Go back'}
       >
-        <Text style={styles.backText}>← Back</Text>
+        <Text style={styles.backText}>{rightLabel ?? '← Back'}</Text>
       </Pressable>
     </View>
   );
@@ -85,17 +89,9 @@ const styles = StyleSheet.create({
     color: neu.muted,
   },
   backPill: {
+    ...neuPill,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderRadius: radius.full,
-    backgroundColor: neu.card,
-    borderWidth: 1.5,
-    borderColor: neu.borderSoft,
-    shadowColor: neu.shadowSoft.color,
-    shadowOpacity: neu.shadowSoft.opacity,
-    shadowRadius: neu.shadowSoft.radius,
-    shadowOffset: neu.shadowSoft.offset,
-    elevation: 2,
   },
   backText: {
     fontSize: 13,
