@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,10 +11,12 @@ import {
   DiceCountPills,
   type DiceCount,
 } from '../../src/components/dice/DiceRoller';
+import { InstantPressable } from '../../src/navigation/InstantPressable';
+import { NoiseOverlay } from '../../src/components/ui/NoiseOverlay';
 import { useRoom } from '../../src/room/RoomContext';
 import { useSessionLists } from '../../src/session/SessionListsContext';
 import { colors } from '../../src/theme/colors';
-import { neu } from '../../src/theme/neumorph';
+import { neu, affect, elevationStyle } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
 
 export default function PlayDiceScreen() {
@@ -44,6 +46,7 @@ export default function PlayDiceScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <NoiseOverlay opacity={0.04} frequency={0.85} />
       <PlayChrome title="Dice Roller" subtitle="Swipe the table to cast" />
 
       <View style={styles.stageWrap}>
@@ -52,22 +55,19 @@ export default function PlayDiceScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.pillLabel}>Dice</Text>
-        <DiceCountPills count={count} onChange={setCount} />
+        <DiceCountPills count={count} onChange={setCount} disabled={busy} />
 
-        <Pressable
+        <InstantPressable
           onPress={openDiceRoom}
           disabled={busy}
-          style={({ pressed }) => [
-            styles.roomBtn,
-            { opacity: busy ? 0.6 : pressed ? 0.9 : 1 },
-          ]}
+          style={[styles.roomBtn, busy && styles.roomBtnBusy]}
         >
           {busy ? (
             <ActivityIndicator color={colors.brand.slate[900]} />
           ) : (
             <Text style={styles.roomBtnText}>Open dice room</Text>
           )}
-        </Pressable>
+        </InstantPressable>
       </View>
       <AdBanner />
     </SafeAreaView>
@@ -98,13 +98,17 @@ const styles = StyleSheet.create({
   },
   roomBtn: {
     marginTop: spacing[1],
-    backgroundColor: colors.brand.amber[400],
+    backgroundColor: affect.reward.solid,
     minHeight: 48,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: colors.brand.amber[500],
+    borderColor: affect.reward.solidStrong,
+    ...elevationStyle('cta'),
+  },
+  roomBtnBusy: {
+    opacity: 0.6,
   },
   roomBtnText: {
     color: colors.brand.slate[900],

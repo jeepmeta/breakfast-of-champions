@@ -1,25 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 
 import { PHYSICS_DICE_HTML } from './physicsDiceHtml';
 import { DiceResultPopup } from './DiceResultPopup';
 import { InstantPressable } from '../../navigation/InstantPressable';
-import { colors } from '../../theme/colors';
 import { neu, affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 
 export type DiceCount = 1 | 2 | 3 | 4 | 5 | 6;
 
-/** Physics stage only — pills live in the parent play screen. */
-export function DiceRoller({
-  count = 2,
-  onCountConsumed,
-}: {
+type RollerProps = {
   count?: DiceCount;
+  /** Called after a result is dismissed and the table resets. */
   onCountConsumed?: () => void;
-}) {
+};
+
+/**
+ * Physics stage + result modal.
+ * WebView handles swipe-to-roll; RN owns popup + reset bridge.
+ */
+export function DiceRoller({ count = 2, onCountConsumed }: RollerProps) {
   const webRef = useRef<WebView>(null);
   const [rolling, setRolling] = useState(false);
   const [ready, setReady] = useState(false);
@@ -28,61 +30,85 @@ export function DiceRoller({
   const [popupOpen, setPopupOpen] = useState(false);
   const countRef = useRef(count);
   countRef.current = count;
+  const rollingRef = useRef(false);
 
   const inject = useCallback((js: string) => {
-    webRef.current?.injectJavaScript(`${js}; true;`);
+    webRef.current?.injectJavaScript(`${js}\ntrue;`);
   }, []);
 
+  // Sync dice count when idle only (avoid mid-roll respawn)
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || rollingRef.current || popupOpen) return;
     inject(`window.wafflrSetCount && window.wafflrSetCount(${count})`);
-  }, [count, ready, inject]);
+  }, [count, ready, inject, popupOpen]);
 
   const onMessage = useCallback(
     (e: WebViewMessageEvent) => {
+      let data: {
+        type: string;
+        total?: number;
+        details?: number[];
+      };
       try {
-        const data = JSON.parse(e.nativeEvent.data) as {
-          type: string;
-          total?: number;
-          details?: number[];
-        };
-        if (data.type === 'ready') {
+        data = JSON.parse(e.nativeEvent.data);
+      } catch {
+        return;
+      }
+
+      switch (data.type) {
+        case 'ready':
           setReady(true);
           inject(
             `window.wafflrSetCount && window.wafflrSetCount(${countRef.current})`,
           );
-        } else if (data.type === 'rolling') {
+          break;
+
+        case 'rolling':
+          rollingRef.current = true;
           setRolling(true);
           setPopupOpen(false);
           setTotal(null);
+          setDetails([]);
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
             () => undefined,
           );
-        } else if (data.type === 'result') {
+          break;
+
+        case 'result':
+          rollingRef.current = false;
           setRolling(false);
-          setTotal(data.total ?? 0);
-          setDetails(data.details ?? []);
+          setTotal(typeof data.total === 'number' ? data.total : 0);
+          setDetails(Array.isArray(data.details) ? data.details : []);
           setPopupOpen(true);
           void Haptics.notificationAsync(
             Haptics.NotificationFeedbackType.Success,
           ).catch(() => undefined);
-        } else if (data.type === 'idle') {
+          break;
+
+        case 'idle':
+          rollingRef.current = false;
           setRolling(false);
-        }
-      } catch {
-        // ignore
+          break;
+
+        default:
+          break;
       }
     },
     [inject],
   );
 
-  const dismissAndReset = () => {
+  const dismissAndReset = useCallback(() => {
     setPopupOpen(false);
     setTotal(null);
     setDetails([]);
-    inject('window.wafflrReset && window.wafflrReset()');
+    rollingRef.current = false;
+    setRolling(false);
+    // Reset table after modal starts closing so WebView is interactive again
+    requestAnimationFrame(() => {
+      inject('window.wafflrReset && window.wafflrReset()');
+    });
     onCountConsumed?.();
-  };
+  }, [inject, onCountConsumed]);
 
   return (
     <View style={styles.root}>
@@ -96,19 +122,31 @@ export function DiceRoller({
           scrollEnabled={false}
           bounces={false}
           overScrollMode="never"
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           mixedContentMode="always"
           javaScriptEnabled
           domStorageEnabled
           setSupportMultipleWindows={false}
+          // Keep swipe gestures inside the WebView on Android
+          nestedScrollEnabled={false}
+          // Avoid Android touch bleed under Modal
+          pointerEvents={popupOpen ? 'none' : 'auto'}
           containerStyle={styles.webContainer}
+          // Silence Android chrome
+          {...(Platform.OS === 'android'
+            ? { androidLayerType: 'hardware' as const }
+            : {})}
         />
+
         {!ready ? (
-          <View style={styles.loading}>
+          <View style={styles.loading} pointerEvents="none">
             <Text style={styles.loadingText}>Setting the table…</Text>
           </View>
         ) : null}
+
         {rolling ? (
           <View style={styles.rollingBadge} pointerEvents="none">
             <Text style={styles.rollingText}>Rolling…</Text>
@@ -147,7 +185,7 @@ export function DiceCountPills({
             style={[
               styles.pill,
               active && styles.pillActive,
-              disabled && styles.pillDisabled,
+              disabled ? styles.pillDisabled : null,
             ]}
           >
             <Text style={[styles.pillText, active && styles.pillTextActive]}>
@@ -183,7 +221,6 @@ const styles = StyleSheet.create({
   rollingBadge: {
     position: 'absolute',
     top: 12,
-    alignSelf: 'center',
     left: 0,
     right: 0,
     alignItems: 'center',

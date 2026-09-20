@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import {
   Modal,
   View,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,12 +17,12 @@ import Animated, {
   withSequence,
   interpolate,
   Easing,
+  runOnJS,
 } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
-import { NeuSurface } from '../ui/NeuSurface';
-import { InstantPressable } from '../../navigation/InstantPressable';
 import { colors } from '../../theme/colors';
-import { neu, affect } from '../../theme/neumorph';
+import { neu, affect, elevationStyle } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 import { SPRINGS } from '../../constants/springs';
 
@@ -47,9 +48,14 @@ type Props = {
   onDismiss: () => void;
 };
 
+const CARD_W = 228;
+const CARD_H = 348;
 const { height: SCREEN_H } = Dimensions.get('window');
 
-/** Portrait playing-card style total reveal. */
+/**
+ * Portrait result card. Uses RN Pressable (not GH) inside Modal so taps
+ * always register — GH Pressable is unreliable under RN Modal.
+ */
 export function DiceResultPopup({
   visible,
   total,
@@ -63,70 +69,66 @@ export function DiceResultPopup({
   );
 
   const cardOpacity = useSharedValue(0);
-  const cardScale = useSharedValue(0.82);
-  const cornerOp = useSharedValue(0);
-  const totalScale = useSharedValue(0.4);
+  const cardScale = useSharedValue(0.86);
+  const totalScale = useSharedValue(0.5);
   const totalOp = useSharedValue(0);
   const detailOp = useSharedValue(0);
-  const btnY = useSharedValue(24);
   const btnOp = useSharedValue(0);
   const shine = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      cardOpacity.value = withTiming(1, { duration: 140 });
+      cardOpacity.value = withTiming(1, { duration: 120 });
       cardScale.value = withSpring(1, SPRINGS.bouncy);
-      cornerOp.value = withDelay(60, withTiming(1, { duration: 180 }));
-      totalOp.value = withDelay(140, withTiming(1, { duration: 120 }));
+      totalOp.value = withDelay(100, withTiming(1, { duration: 100 }));
       totalScale.value = withDelay(
-        140,
+        100,
         withSequence(
-          withSpring(1.12, SPRINGS.bouncy),
+          withSpring(1.1, SPRINGS.bouncy),
           withSpring(1, SPRINGS.snappy),
         ),
       );
-      detailOp.value = withDelay(260, withTiming(1, { duration: 160 }));
-      btnOp.value = withDelay(340, withTiming(1, { duration: 160 }));
-      btnY.value = withDelay(340, withSpring(0, SPRINGS.bouncy));
+      detailOp.value = withDelay(200, withTiming(1, { duration: 140 }));
+      // Button fully interactive as soon as visible — no opacity gate
+      btnOp.value = withDelay(220, withTiming(1, { duration: 140 }));
       shine.value = withDelay(
-        180,
-        withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+        120,
+        withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }),
       );
     } else {
       cardOpacity.value = 0;
-      cardScale.value = 0.82;
-      cornerOp.value = 0;
-      totalScale.value = 0.4;
+      cardScale.value = 0.86;
+      totalScale.value = 0.5;
       totalOp.value = 0;
       detailOp.value = 0;
-      btnY.value = 24;
       btnOp.value = 0;
       shine.value = 0;
     }
   }, [
     visible,
     btnOp,
-    btnY,
     cardOpacity,
     cardScale,
-    cornerOp,
     detailOp,
     shine,
     totalOp,
     totalScale,
   ]);
 
+  const handleDismiss = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+      () => undefined,
+    );
+    onDismiss();
+  }, [onDismiss]);
+
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: cardOpacity.value * 0.5,
+    opacity: cardOpacity.value * 0.52,
   }));
 
   const cardStyle = useAnimatedStyle(() => ({
     opacity: cardOpacity.value,
     transform: [{ scale: cardScale.value }],
-  }));
-
-  const cornerStyle = useAnimatedStyle(() => ({
-    opacity: cornerOp.value,
   }));
 
   const totalStyle = useAnimatedStyle(() => ({
@@ -139,18 +141,17 @@ export function DiceResultPopup({
   }));
 
   const btnStyle = useAnimatedStyle(() => ({
-    opacity: btnOp.value,
-    transform: [{ translateY: btnY.value }],
+    opacity: Math.max(0.35, btnOp.value),
   }));
 
   const shineStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        translateY: interpolate(shine.value, [0, 1], [-40, SCREEN_H * 0.35]),
+        translateY: interpolate(shine.value, [0, 1], [-36, SCREEN_H * 0.32]),
       },
       { rotate: '12deg' },
     ],
-    opacity: interpolate(shine.value, [0, 0.35, 1], [0, 0.55, 0]),
+    opacity: interpolate(shine.value, [0, 0.35, 1], [0, 0.5, 0]),
   }));
 
   const subtitle =
@@ -165,66 +166,88 @@ export function DiceResultPopup({
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={onDismiss}
+      statusBarTranslucent
+      onRequestClose={handleDismiss}
     >
-      <View style={styles.root} pointerEvents="box-none">
-        <Animated.View style={[styles.backdrop, backdropStyle]} />
-
-        <Animated.View style={[styles.cardWrap, cardStyle]}>
-          <NeuSurface
-            level="float"
-            borderRadius={18}
-            borderWidth={3}
-            borderColor={affect.delight.softBorder}
-            backgroundColor={neu.card}
-            style={styles.surface}
-            contentStyle={styles.cardFace}
+      {/* Required so any nested GH views (if added) still work under Modal */}
+      <GestureHandlerRootView style={styles.modalRoot}>
+        <View style={styles.root}>
+          {/* Full-screen dismiss — RN Pressable, always hittable */}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={handleDismiss}
+            accessibilityLabel="Dismiss result"
           >
-            <Animated.View style={[styles.cornerTL, cornerStyle]}>
-              <Text style={styles.pipNum}>{total}</Text>
-              <Text style={styles.pipSuit}>🎲</Text>
-            </Animated.View>
-            <Animated.View style={[styles.cornerBR, cornerStyle]}>
-              <Text style={[styles.pipNum, styles.pipFlip]}>{total}</Text>
-              <Text style={[styles.pipSuit, styles.pipFlip]}>🎲</Text>
-            </Animated.View>
-
             <Animated.View
-              style={[styles.shine, shineStyle]}
               pointerEvents="none"
-            >
-              <View style={styles.shineBand} />
-            </Animated.View>
+              style={[styles.backdrop, backdropStyle]}
+            />
+          </Pressable>
 
-            <View style={styles.center}>
-              <Text style={styles.badge}>TOTAL</Text>
-              <Animated.Text style={[styles.total, totalStyle]}>
-                {total}
-              </Animated.Text>
-              {subtitle ? (
-                <Animated.Text style={[styles.sub, detailStyle]}>
-                  {subtitle}
-                </Animated.Text>
-              ) : null}
-            </View>
+          {/* Card — stop propagation so backdrop doesn't steal CTA taps */}
+          <Animated.View
+            style={[styles.cardWrap, cardStyle]}
+            pointerEvents="box-none"
+          >
+            <Pressable onPress={(e) => e?.stopPropagation?.()}>
+              <View style={styles.card}>
+                {/* Corner pips — non-interactive */}
+                <View style={styles.cornerTL} pointerEvents="none">
+                  <Text style={styles.pipNum}>{total}</Text>
+                  <Text style={styles.pipSuit}>🎲</Text>
+                </View>
+                <View style={styles.cornerBR} pointerEvents="none">
+                  <Text style={[styles.pipNum, styles.pipFlip]}>{total}</Text>
+                  <Text style={[styles.pipSuit, styles.pipFlip]}>🎲</Text>
+                </View>
 
-            {/* Button sits above bottom pips */}
-            <Animated.View style={[styles.actions, btnStyle]}>
-              <InstantPressable onPress={onDismiss} style={styles.btnPrimary}>
-                <Text style={styles.btnPrimaryText}>{cheer}</Text>
-              </InstantPressable>
-            </Animated.View>
-          </NeuSurface>
-        </Animated.View>
-      </View>
+                <Animated.View
+                  style={[styles.shine, shineStyle]}
+                  pointerEvents="none"
+                >
+                  <View style={styles.shineBand} />
+                </Animated.View>
+
+                <View style={styles.center} pointerEvents="none">
+                  <Text style={styles.badge}>TOTAL</Text>
+                  <Animated.Text style={[styles.total, totalStyle]}>
+                    {total}
+                  </Animated.Text>
+                  {subtitle ? (
+                    <Animated.Text style={[styles.sub, detailStyle]}>
+                      {subtitle}
+                    </Animated.Text>
+                  ) : null}
+                </View>
+
+                {/* CTA — RN Pressable, high zIndex, clear of bottom pips */}
+                <Animated.View style={[styles.actions, btnStyle]}>
+                  <Pressable
+                    onPress={handleDismiss}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={cheer}
+                    style={({ pressed }) => [
+                      styles.btnPrimary,
+                      pressed && styles.btnPressed,
+                    ]}
+                  >
+                    <Text style={styles.btnPrimaryText}>{cheer}</Text>
+                  </Pressable>
+                </Animated.View>
+              </View>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
-const CARD_W = 220;
-const CARD_H = 340;
-
 const styles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+  },
   root: {
     flex: 1,
     alignItems: 'center',
@@ -238,17 +261,21 @@ const styles = StyleSheet.create({
   cardWrap: {
     width: CARD_W,
     height: CARD_H,
-    zIndex: 2,
+    zIndex: 10,
+    elevation: 20,
   },
-  surface: {
+  card: {
     flex: 1,
-  },
-  cardFace: {
-    flex: 1,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: affect.delight.softBorder,
+    backgroundColor: neu.card,
+    overflow: 'hidden',
+    ...elevationStyle('float'),
     paddingTop: spacing[4],
     paddingHorizontal: spacing[3],
-    // Leave room above bottom pips for the CTA
-    paddingBottom: 56,
+    // Reserve space so CTA never covers bottom pips
+    paddingBottom: 12,
   },
   cornerTL: {
     position: 'absolute',
@@ -259,19 +286,19 @@ const styles = StyleSheet.create({
   },
   cornerBR: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 8,
     right: 12,
     alignItems: 'center',
-    zIndex: 2,
+    zIndex: 1,
   },
   pipNum: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
     color: affect.delight.text,
-    lineHeight: 20,
+    lineHeight: 19,
   },
   pipSuit: {
-    fontSize: 14,
+    fontSize: 13,
     marginTop: -2,
   },
   pipFlip: {
@@ -279,8 +306,8 @@ const styles = StyleSheet.create({
   },
   shine: {
     position: 'absolute',
-    left: -30,
-    width: 70,
+    left: -28,
+    width: 64,
     top: 0,
     bottom: 0,
     zIndex: 1,
@@ -295,7 +322,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     zIndex: 2,
-    paddingBottom: spacing[2],
+    paddingBottom: 8,
   },
   badge: {
     fontSize: 11,
@@ -317,16 +344,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
   },
   actions: {
-    zIndex: 3,
+    zIndex: 20,
     paddingHorizontal: spacing[2],
-    marginBottom: spacing[1],
+    // Lift CTA above bottom-right pip
+    marginBottom: 36,
   },
   btnPrimary: {
     backgroundColor: affect.delight.solid,
-    minHeight: 46,
+    minHeight: 48,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  btnPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.97 }],
   },
   btnPrimaryText: {
     fontWeight: '900',
