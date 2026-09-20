@@ -11,6 +11,7 @@ import * as Haptics from 'expo-haptics';
 
 import { WHEEL_PHYSICS, WHEEL_SEGMENT_COLORS } from '../../constants/wheel-physics';
 import { colors } from '../../theme/colors';
+import { affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 
 export type WheelSegment = {
@@ -34,12 +35,11 @@ type Props = {
   hideSpinButton?: boolean;
   externalSpin?: ExternalSpin | null;
   hideResult?: boolean;
-  /** Continuous tick haptics while spinning. Default true (group wheel). Solo basic = false. */
   tickHaptics?: boolean;
-  /** Haptic when spin starts. Default true. */
   spinStartHaptic?: boolean;
-  /** Haptic when spin settles. Default true. */
   settleHaptic?: boolean;
+  /** Imperative spin trigger — increment to spin again without remount */
+  spinNonce?: number;
 };
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
@@ -78,6 +78,7 @@ export function WafflrWheel({
   tickHaptics = true,
   spinStartHaptic = true,
   settleHaptic = true,
+  spinNonce = 0,
 }: Props) {
   const rotation = useSharedValue(0);
   const velocity = useSharedValue(0);
@@ -89,6 +90,7 @@ export function WafflrWheel({
   const segmentsRef = useRef(segments);
   segmentsRef.current = segments;
   const lastNonceRef = useRef<number | null>(null);
+  const lastSpinNonceRef = useRef(spinNonce);
   const tickHapticsRef = useRef(tickHaptics);
   tickHapticsRef.current = tickHaptics;
   const settleHapticRef = useRef(settleHaptic);
@@ -145,13 +147,9 @@ export function WafflrWheel({
       setWinnerIndex(idx);
       setIsSpinning(false);
       if (settleHapticRef.current) {
-        try {
-          void Haptics.notificationAsync(
-            Haptics.NotificationFeedbackType.Success,
-          );
-        } catch {
-          // ignore
-        }
+        void Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        ).catch(() => undefined);
       }
       onSpinEnd?.(segmentsRef.current[idx], idx);
     },
@@ -160,11 +158,7 @@ export function WafflrWheel({
 
   const tickHaptic = useCallback(() => {
     if (!tickHapticsRef.current) return;
-    try {
-      void Haptics.selectionAsync();
-    } catch {
-      // ignore
-    }
+    void Haptics.selectionAsync().catch(() => undefined);
   }, []);
 
   const beginSpin = useCallback(
@@ -177,11 +171,9 @@ export function WafflrWheel({
       didFinish.value = false;
       spinning.value = true;
       if (withStartHaptic) {
-        try {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        } catch {
-          // ignore
-        }
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+          () => undefined,
+        );
       }
     },
     [didFinish, lastTickAngle, rotation, spinning, velocity],
@@ -194,11 +186,33 @@ export function WafflrWheel({
     beginSpin(externalSpin.velocity, externalSpin.startRotation, spinStartHaptic);
   }, [externalSpin, beginSpin, spinStartHaptic]);
 
+  // Parent “Spin again” without remounting the wheel
+  useEffect(() => {
+    if (spinNonce === lastSpinNonceRef.current) return;
+    if (spinNonce === 0) {
+      lastSpinNonceRef.current = 0;
+      return;
+    }
+    lastSpinNonceRef.current = spinNonce;
+    if (spinning.value || isSpinning) return;
+    const { initial_velocity_range } = WHEEL_PHYSICS;
+    const v =
+      initial_velocity_range.min +
+      Math.random() *
+        (initial_velocity_range.max - initial_velocity_range.min);
+    beginSpin(v, rotation.value, spinStartHaptic);
+  }, [spinNonce, beginSpin, isSpinning, rotation, spinning, spinStartHaptic]);
+
   useFrameCallback(() => {
     'worklet';
     if (!spinning.value) return;
 
-    velocity.value *= WHEEL_PHYSICS.friction;
+    let nextV = velocity.value * WHEEL_PHYSICS.friction;
+    // Extra stickiness when nearly stopped
+    if (Math.abs(nextV) < WHEEL_PHYSICS.sticky_threshold) {
+      nextV *= WHEEL_PHYSICS.sticky_friction;
+    }
+    velocity.value = nextV;
     rotation.value += velocity.value;
 
     const interval = WHEEL_PHYSICS.haptic_tick_interval_deg;
@@ -244,47 +258,69 @@ export function WafflrWheel({
         <Svg width={size} height={size}>
           <G>
             {sliceMeta.map((slice) => {
-              const labelPos = polarToCartesian(cx, cy, r * 0.62, slice.mid);
-              const label =
-                slice.emoji ??
-                (slice.label.length > 8
-                  ? slice.label.slice(0, 7) + '…'
-                  : slice.label);
+              const emojiPos = polarToCartesian(cx, cy, r * 0.58, slice.mid);
+              const labelPos = polarToCartesian(cx, cy, r * 0.78, slice.mid);
+              const emojiSize =
+                slice.sweep < 32 ? 18 : slice.sweep < 48 ? 24 : 28;
+              const labelSize =
+                slice.sweep < 32 ? 9 : slice.sweep < 48 ? 11 : 12;
+              const shortLabel =
+                slice.label.length > 10
+                  ? slice.label.slice(0, 9) + '…'
+                  : slice.label;
+
               return (
                 <G key={slice.id}>
                   <Path
                     d={describeArc(cx, cy, r, slice.start, slice.end)}
                     fill={slice.color}
                     stroke={colors.brand.slate[900]}
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                   />
-                  <SvgText
-                    x={labelPos.x}
-                    y={labelPos.y}
-                    fill={colors.brand.slate[900]}
-                    fontSize={slice.sweep < 40 ? 10 : 12}
-                    fontWeight="700"
-                    textAnchor="middle"
-                    alignmentBaseline="middle"
-                  >
-                    {label}
-                  </SvgText>
+                  {/* Large emoji — primary icon */}
+                  {slice.emoji ? (
+                    <SvgText
+                      x={emojiPos.x}
+                      y={emojiPos.y}
+                      fill={colors.brand.slate[900]}
+                      fontSize={emojiSize}
+                      fontWeight="700"
+                      textAnchor="middle"
+                      alignmentBaseline="middle"
+                    >
+                      {slice.emoji}
+                    </SvgText>
+                  ) : null}
+                  {/* Label under emoji when segment is wide enough */}
+                  {slice.sweep >= 28 ? (
+                    <SvgText
+                      x={labelPos.x}
+                      y={labelPos.y}
+                      fill={colors.brand.slate[900]}
+                      fontSize={labelSize}
+                      fontWeight="800"
+                      textAnchor="middle"
+                      alignmentBaseline="middle"
+                    >
+                      {shortLabel}
+                    </SvgText>
+                  ) : null}
                 </G>
               );
             })}
             <Circle
               cx={cx}
               cy={cy}
-              r={28}
+              r={Math.max(30, size * 0.1)}
               fill={colors.brand.slate[900]}
-              stroke={colors.brand.amber[500]}
+              stroke={affect.reward.solid}
               strokeWidth={3}
             />
             <SvgText
               x={cx}
               y={cy + 1}
-              fill={colors.brand.amber[500]}
-              fontSize={11}
+              fill={affect.reward.solid}
+              fontSize={Math.max(11, size * 0.04)}
               fontWeight="800"
               textAnchor="middle"
               alignmentBaseline="middle"
@@ -295,10 +331,14 @@ export function WafflrWheel({
         </Svg>
       </Animated.View>
 
+      {/* Tap hub area via transparent overlay for accessibility */}
       {!hideSpinButton ? (
         <Pressable
           onPress={spin}
           disabled={isSpinning}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={isSpinning ? 'Spinning' : 'Spin the wheel'}
           style={({ pressed }) => [
             styles.spinBtn,
             {
@@ -338,19 +378,21 @@ const styles = StyleSheet.create({
   pointer: {
     width: 0,
     height: 0,
-    borderLeftWidth: 12,
-    borderRightWidth: 12,
-    borderTopWidth: 20,
+    borderLeftWidth: 14,
+    borderRightWidth: 14,
+    borderTopWidth: 22,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: colors.brand.amber[500],
+    borderTopColor: affect.reward.solid,
   },
   spinBtn: {
-    marginTop: spacing[8],
-    backgroundColor: colors.brand.amber[500],
+    marginTop: spacing[6],
+    backgroundColor: affect.reward.solid,
     paddingVertical: spacing[4],
     paddingHorizontal: spacing[12],
     borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: affect.reward.solidStrong,
   },
   spinBtnText: {
     color: colors.brand.slate[900],
@@ -368,7 +410,7 @@ const styles = StyleSheet.create({
   resultLabel: {
     fontSize: 22,
     fontWeight: '800',
-    color: colors.brand.emerald[500],
+    color: affect.success.solid,
   },
   hint: {
     marginTop: spacing[6],

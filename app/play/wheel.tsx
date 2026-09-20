@@ -1,22 +1,18 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlayChrome } from '../../src/components/play/PlayChrome';
 import { AdBanner } from '../../src/components/ads/AdBanner';
+import { NoiseOverlay } from '../../src/components/ui/NoiseOverlay';
 import {
   WafflrWheel,
   type WheelSegment,
 } from '../../src/components/wheel/WafflrWheel';
 import { WinnerPopup } from '../../src/components/wheel/WinnerPopup';
+import { InstantPressable } from '../../src/navigation/InstantPressable';
 import {
   WHEEL_TOPICS,
   getTopic,
@@ -27,7 +23,7 @@ import {
 import { useRoom } from '../../src/room/RoomContext';
 import { useSessionLists } from '../../src/session/SessionListsContext';
 import { colors } from '../../src/theme/colors';
-import { neu } from '../../src/theme/neumorph';
+import { neu, affect, elevationStyle } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
 
 export default function PlayWheelScreen() {
@@ -36,7 +32,11 @@ export default function PlayWheelScreen() {
   const [winner, setWinner] = useState<WheelSegment | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [wheelKey, setWheelKey] = useState(0);
+  const [spinning, setSpinning] = useState(false);
+  /** Bumps to re-spin without remounting the wheel */
+  const [spinNonce, setSpinNonce] = useState(0);
+  /** Only remount when topic/variation changes */
+  const [catalogKey, setCatalogKey] = useState(0);
 
   const { create, isLoading } = useRoom();
   const { upsertRoom } = useSessionLists();
@@ -58,53 +58,55 @@ export default function PlayWheelScreen() {
     [variation],
   );
 
-  const selectTopic = async (id: WheelTopicId) => {
-    if (id === topicId) return;
-    try {
-      await Haptics.selectionAsync();
-    } catch {
-      // ignore
-    }
+  const selectTopic = (id: WheelTopicId) => {
+    if (id === topicId || spinning || popupOpen) return;
+    void Haptics.selectionAsync().catch(() => undefined);
     const next = getTopic(id);
     setTopicId(id);
     setVariationId(next.variations[0].id);
     setWinner(null);
     setPopupOpen(false);
-    setWheelKey((k) => k + 1);
+    setCatalogKey((k) => k + 1);
+    setSpinNonce(0);
   };
 
-  const selectVariation = async (id: WheelVariationId) => {
-    if (id === variationId) return;
-    try {
-      await Haptics.selectionAsync();
-    } catch {
-      // ignore
-    }
+  const selectVariation = (id: WheelVariationId) => {
+    if (id === variationId || spinning || popupOpen) return;
+    void Haptics.selectionAsync().catch(() => undefined);
     setVariationId(id);
     setWinner(null);
     setPopupOpen(false);
-    setWheelKey((k) => k + 1);
+    setCatalogKey((k) => k + 1);
+    setSpinNonce(0);
   };
 
   const onSpinEnd = useCallback((segment: WheelSegment) => {
+    setSpinning(false);
     setWinner(segment);
     setPopupOpen(true);
   }, []);
 
-  const spinAgain = () => {
+  const dismissPopup = useCallback(() => {
+    setPopupOpen(false);
+  }, []);
+
+  /** Close popup and spin again — keep wheel instance, bump spinNonce */
+  const spinAgain = useCallback(() => {
     setPopupOpen(false);
     setWinner(null);
-    setWheelKey((k) => k + 1);
-  };
+    setSpinning(true);
+    // slight delay so modal unmounts before spin starts
+    requestAnimationFrame(() => {
+      setSpinNonce((n) => n + 1);
+    });
+  }, []);
 
   const openWheelRoom = async () => {
     if (busy || isLoading) return;
     setBusy(true);
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // ignore
-    }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+      () => undefined,
+    );
     try {
       const { code } = await create({ displayName: 'You' });
       upsertRoom({ code, title: `Wheel ${code}`, role: 'host' });
@@ -116,8 +118,11 @@ export default function PlayWheelScreen() {
     }
   };
 
+  const locked = spinning || popupOpen;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <NoiseOverlay opacity={0.04} frequency={0.85} />
       <PlayChrome title="Wafflr Wheel" subtitle={variation.question} />
 
       <View style={styles.stageWrap}>
@@ -126,10 +131,15 @@ export default function PlayWheelScreen() {
             {WHEEL_TOPICS.map((t) => {
               const active = topicId === t.id;
               return (
-                <Pressable
+                <InstantPressable
                   key={t.id}
+                  disabled={locked}
                   onPress={() => selectTopic(t.id)}
-                  style={[styles.topicChip, active && styles.topicChipActive]}
+                  style={[
+                    styles.topicChip,
+                    active && styles.topicChipActive,
+                    locked && styles.chipLocked,
+                  ]}
                 >
                   <Text style={styles.topicEmoji}>{t.emoji}</Text>
                   <Text
@@ -140,7 +150,7 @@ export default function PlayWheelScreen() {
                   >
                     {t.label}
                   </Text>
-                </Pressable>
+                </InstantPressable>
               );
             })}
           </View>
@@ -149,10 +159,15 @@ export default function PlayWheelScreen() {
             {topic.variations.map((v) => {
               const active = variationId === v.id;
               return (
-                <Pressable
+                <InstantPressable
                   key={v.id}
+                  disabled={locked}
                   onPress={() => selectVariation(v.id)}
-                  style={[styles.varPill, active && styles.varPillActive]}
+                  style={[
+                    styles.varPill,
+                    active && styles.varPillActive,
+                    locked && styles.chipLocked,
+                  ]}
                 >
                   <Text style={styles.varEmoji}>{v.emoji}</Text>
                   <Text
@@ -160,17 +175,21 @@ export default function PlayWheelScreen() {
                   >
                     {v.label}
                   </Text>
-                </Pressable>
+                </InstantPressable>
               );
             })}
           </View>
 
           <View style={styles.wheelWrap}>
             <WafflrWheel
-              key={`${topicId}-${variationId}-${wheelKey}`}
+              key={`catalog-${catalogKey}`}
               segments={segments}
-              size={250}
-              onSpinEnd={onSpinEnd}
+              size={268}
+              spinNonce={spinNonce}
+              onSpinEnd={(seg) => {
+                setSpinning(true);
+                onSpinEnd(seg);
+              }}
               hideResult
               tickHaptics={false}
               spinStartHaptic
@@ -181,20 +200,17 @@ export default function PlayWheelScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable
+        <InstantPressable
           onPress={openWheelRoom}
           disabled={busy}
-          style={({ pressed }) => [
-            styles.roomBtn,
-            { opacity: busy ? 0.6 : pressed ? 0.9 : 1 },
-          ]}
+          style={[styles.roomBtn, busy && styles.roomBtnBusy]}
         >
           {busy ? (
             <ActivityIndicator color={colors.brand.slate[900]} />
           ) : (
             <Text style={styles.roomBtnText}>Open wheel room</Text>
           )}
-        </Pressable>
+        </InstantPressable>
       </View>
 
       <AdBanner />
@@ -204,7 +220,7 @@ export default function PlayWheelScreen() {
         emoji={winner?.emoji ?? '✨'}
         label={winner?.label ?? ''}
         subtitle={`${topic.label} · ${variation.label}`}
-        onClose={() => setPopupOpen(false)}
+        onClose={dismissPopup}
         onSpinAgain={spinAgain}
       />
     </SafeAreaView>
@@ -224,11 +240,12 @@ const styles = StyleSheet.create({
   stage: {
     flex: 1,
     borderRadius: radius['2xl'],
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: neu.borderSoft,
     backgroundColor: neu.card,
     padding: spacing[3],
     gap: spacing[2],
+    ...elevationStyle('card'),
   },
   topicRow: {
     flexDirection: 'row',
@@ -245,10 +262,10 @@ const styles = StyleSheet.create({
     borderColor: neu.borderSoft,
   },
   topicChipActive: {
-    backgroundColor: colors.brand.amber[500],
-    borderColor: colors.brand.amber[600],
+    backgroundColor: affect.reward.solid,
+    borderColor: affect.reward.solidStrong,
   },
-  topicEmoji: { fontSize: 18 },
+  topicEmoji: { fontSize: 20 },
   topicLabel: {
     fontSize: 12,
     fontWeight: '800',
@@ -273,16 +290,17 @@ const styles = StyleSheet.create({
     borderColor: neu.borderSoft,
   },
   varPillActive: {
-    backgroundColor: colors.brand.pink[100],
-    borderColor: colors.brand.pink[500],
+    backgroundColor: affect.delight.soft,
+    borderColor: affect.delight.solid,
   },
-  varEmoji: { fontSize: 13 },
+  varEmoji: { fontSize: 15 },
   varLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: neu.text,
   },
-  varLabelActive: { color: colors.brand.pink[700] },
+  varLabelActive: { color: affect.delight.text },
+  chipLocked: { opacity: 0.55 },
   wheelWrap: {
     flex: 1,
     alignItems: 'center',
@@ -294,14 +312,16 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[2],
   },
   roomBtn: {
-    backgroundColor: colors.brand.amber[400],
+    backgroundColor: affect.reward.solid,
     minHeight: 48,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: colors.brand.amber[500],
+    borderColor: affect.reward.solidStrong,
+    ...elevationStyle('cta'),
   },
+  roomBtnBusy: { opacity: 0.6 },
   roomBtnText: {
     color: colors.brand.slate[900],
     fontSize: 15,
