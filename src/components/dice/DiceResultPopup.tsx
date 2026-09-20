@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -12,7 +12,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  withRepeat,
+  withDelay,
   withSequence,
   interpolate,
   Easing,
@@ -23,72 +23,129 @@ import { neu } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 import { SPRINGS } from '../../constants/springs';
 
+const CHEERS = [
+  'Nice!',
+  'Sweet!',
+  'Delicious!',
+  'Buttery!',
+  'Crispy!',
+  'Perfect!',
+  'Lucky!',
+  'Wow!',
+  'Boom!',
+  'Chef’s kiss!',
+  'Stacked!',
+  'Golden!',
+] as const;
+
 type Props = {
   visible: boolean;
   total: number;
   details: number[];
-  onClose: () => void;
-  onRollAgain?: () => void;
+  /** Resets table / dismisses */
+  onDismiss: () => void;
 };
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-/** Instant-win pop-up for dice totals. */
-export function DiceResultPopup({
-  visible,
-  total,
-  details,
-  onClose,
-  onRollAgain,
-}: Props) {
-  const scale = useSharedValue(0.65);
-  const opacity = useSharedValue(0);
+/** Staggered total card — single cycling cheer CTA resets the table. */
+export function DiceResultPopup({ visible, total, details, onDismiss }: Props) {
+  const cheer = useMemo(
+    () => CHEERS[Math.floor(Math.random() * CHEERS.length)],
+    // re-roll word each time the popup opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visible, total],
+  );
+
+  const cardOpacity = useSharedValue(0);
+  const cardScale = useSharedValue(0.7);
+  const badgeY = useSharedValue(12);
+  const badgeOp = useSharedValue(0);
+  const totalScale = useSharedValue(0.5);
+  const totalOp = useSharedValue(0);
+  const detailOp = useSharedValue(0);
+  const btnY = useSharedValue(20);
+  const btnOp = useSharedValue(0);
   const shine = useSharedValue(0);
-  const bob = useSharedValue(0);
-  const numberPop = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      opacity.value = withTiming(1, { duration: 160 });
-      scale.value = withSpring(1, SPRINGS.bouncy);
-      numberPop.value = withSequence(
-        withSpring(1.12, SPRINGS.bouncy),
-        withSpring(1, SPRINGS.snappy),
-      );
-      bob.value = withRepeat(
+      cardOpacity.value = withTiming(1, { duration: 140 });
+      cardScale.value = withSpring(1, SPRINGS.bouncy);
+
+      badgeOp.value = withDelay(80, withTiming(1, { duration: 160 }));
+      badgeY.value = withDelay(80, withSpring(0, SPRINGS.snappy));
+
+      totalOp.value = withDelay(160, withTiming(1, { duration: 120 }));
+      totalScale.value = withDelay(
+        160,
         withSequence(
-          withSpring(1, SPRINGS.gentle),
-          withSpring(0, SPRINGS.gentle),
+          withSpring(1.14, SPRINGS.bouncy),
+          withSpring(1, SPRINGS.snappy),
         ),
-        -1,
-        false,
       );
-      shine.value = withRepeat(
-        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
-        -1,
-        true,
+
+      detailOp.value = withDelay(280, withTiming(1, { duration: 180 }));
+
+      btnOp.value = withDelay(360, withTiming(1, { duration: 160 }));
+      btnY.value = withDelay(360, withSpring(0, SPRINGS.bouncy));
+
+      shine.value = withDelay(
+        200,
+        withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }),
       );
     } else {
-      opacity.value = 0;
-      scale.value = 0.65;
-      numberPop.value = 0;
+      cardOpacity.value = 0;
+      cardScale.value = 0.7;
+      badgeY.value = 12;
+      badgeOp.value = 0;
+      totalScale.value = 0.5;
+      totalOp.value = 0;
+      detailOp.value = 0;
+      btnY.value = 20;
+      btnOp.value = 0;
+      shine.value = 0;
     }
-  }, [visible, bob, numberPop, opacity, scale, shine]);
+  }, [
+    visible,
+    badgeOp,
+    badgeY,
+    btnOp,
+    btnY,
+    cardOpacity,
+    cardScale,
+    detailOp,
+    shine,
+    totalOp,
+    totalScale,
+  ]);
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value * 0.5,
+    opacity: cardOpacity.value * 0.48,
   }));
 
   const cardStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { scale: scale.value },
-      { translateY: interpolate(bob.value, [0, 1], [0, -5]) },
-    ],
+    opacity: cardOpacity.value,
+    transform: [{ scale: cardScale.value }],
+  }));
+
+  const badgeStyle = useAnimatedStyle(() => ({
+    opacity: badgeOp.value,
+    transform: [{ translateY: badgeY.value }],
   }));
 
   const totalStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: numberPop.value || 1 }],
+    opacity: totalOp.value,
+    transform: [{ scale: totalScale.value }],
+  }));
+
+  const detailStyle = useAnimatedStyle(() => ({
+    opacity: detailOp.value,
+  }));
+
+  const btnStyle = useAnimatedStyle(() => ({
+    opacity: btnOp.value,
+    transform: [{ translateY: btnY.value }],
   }));
 
   const shineStyle = useAnimatedStyle(() => ({
@@ -97,61 +154,64 @@ export function DiceResultPopup({
         translateX: interpolate(
           shine.value,
           [0, 1],
-          [-SCREEN_W * 0.35, SCREEN_W * 0.45],
+          [-SCREEN_W * 0.4, SCREEN_W * 0.5],
         ),
       },
       { rotate: '18deg' },
     ],
-    opacity: 0.45,
+    opacity: interpolate(shine.value, [0, 0.4, 1], [0, 0.5, 0]),
   }));
 
   const subtitle =
     details.length > 1
       ? details.join(' + ')
       : details.length === 1
-        ? `Single die · ${details[0]}`
+        ? `Rolled a ${details[0]}`
         : undefined;
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onDismiss}
+    >
       <View style={styles.root} pointerEvents="box-none">
         <Animated.View style={[styles.backdrop, backdropStyle]} />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <Animated.View style={[styles.cardWrap, cardStyle]}>
           <View style={styles.card}>
             <View style={styles.cardInner}>
-              <Animated.View style={[styles.shine, shineStyle]} pointerEvents="none">
+              <Animated.View
+                style={[styles.shine, shineStyle]}
+                pointerEvents="none"
+              >
                 <View style={styles.shineBand} />
               </Animated.View>
 
-              <Text style={styles.badge}>TOTAL</Text>
-              <Text style={styles.emoji}>🎲</Text>
-              <Animated.Text style={[styles.total, totalStyle]}>{total}</Animated.Text>
-              {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
+              <Animated.Text style={[styles.badge, badgeStyle]}>
+                TOTAL
+              </Animated.Text>
+              <Animated.Text style={[styles.total, totalStyle]}>
+                {total}
+              </Animated.Text>
+              {subtitle ? (
+                <Animated.Text style={[styles.sub, detailStyle]}>
+                  {subtitle}
+                </Animated.Text>
+              ) : null}
 
-              <View style={styles.actions}>
-                {onRollAgain ? (
-                  <Pressable
-                    onPress={onRollAgain}
-                    style={({ pressed }) => [
-                      styles.btnPrimary,
-                      { opacity: pressed ? 0.9 : 1 },
-                    ]}
-                  >
-                    <Text style={styles.btnPrimaryText}>Roll again</Text>
-                  </Pressable>
-                ) : null}
+              <Animated.View style={[styles.actions, btnStyle]}>
                 <Pressable
-                  onPress={onClose}
+                  onPress={onDismiss}
                   style={({ pressed }) => [
-                    styles.btnGhost,
-                    { opacity: pressed ? 0.85 : 1 },
+                    styles.btnPrimary,
+                    { opacity: pressed ? 0.9 : 1 },
                   ]}
                 >
-                  <Text style={styles.btnGhostText}>Nice</Text>
+                  <Text style={styles.btnPrimaryText}>{cheer}</Text>
                 </Pressable>
-              </View>
+              </Animated.View>
             </View>
           </View>
         </Animated.View>
@@ -173,7 +233,7 @@ const styles = StyleSheet.create({
   },
   cardWrap: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 320,
     zIndex: 2,
   },
   card: {
@@ -204,7 +264,7 @@ const styles = StyleSheet.create({
   },
   shineBand: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
   },
   badge: {
     fontSize: 12,
@@ -212,15 +272,11 @@ const styles = StyleSheet.create({
     letterSpacing: 2.5,
     color: colors.brand.pink[600],
   },
-  emoji: {
-    fontSize: 40,
-    marginTop: spacing[1],
-  },
   total: {
-    fontSize: 72,
+    fontSize: 76,
     fontWeight: '900',
     color: colors.brand.pink[600],
-    lineHeight: 80,
+    lineHeight: 84,
   },
   sub: {
     fontSize: 15,
@@ -232,32 +288,17 @@ const styles = StyleSheet.create({
   actions: {
     marginTop: spacing[5],
     width: '100%',
-    gap: spacing[2],
   },
   btnPrimary: {
     backgroundColor: colors.brand.pink[500],
-    minHeight: 48,
+    minHeight: 52,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnPrimaryText: {
-    fontWeight: '800',
-    fontSize: 16,
+    fontWeight: '900',
+    fontSize: 18,
     color: colors.brand.white,
-  },
-  btnGhost: {
-    minHeight: 44,
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.brand.pink[200],
-    backgroundColor: 'rgba(255,255,255,0.7)',
-  },
-  btnGhostText: {
-    fontWeight: '700',
-    fontSize: 15,
-    color: neu.muted,
   },
 });
