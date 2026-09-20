@@ -18,8 +18,9 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 
+import { NeuSurface } from '../ui/NeuSurface';
 import { colors } from '../../theme/colors';
-import { neu } from '../../theme/neumorph';
+import { neu, affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 import { SPRINGS } from '../../constants/springs';
 
@@ -169,8 +170,15 @@ export function DiceResultPopup({
         <Animated.View style={[styles.backdrop, backdropStyle]} />
 
         <Animated.View style={[styles.cardWrap, cardStyle]}>
-          <View style={styles.card}>
-            {/* Corner pips like a playing card */}
+          <NeuSurface
+            level="float"
+            borderRadius={18}
+            borderWidth={3}
+            borderColor={affect.delight.softBorder}
+            backgroundColor={neu.card}
+            style={styles.surface}
+            contentStyle={styles.cardFace}
+          >
             <Animated.View style={[styles.cornerTL, cornerStyle]}>
               <Text style={styles.pipNum}>{total}</Text>
               <Text style={styles.pipSuit}>🎲</Text>
@@ -210,7 +218,7 @@ export function DiceResultPopup({
                 <Text style={styles.btnPrimaryText}>{cheer}</Text>
               </Pressable>
             </Animated.View>
-          </View>
+          </NeuSurface>
         </Animated.View>
       </View>
     </Modal>
@@ -236,18 +244,11 @@ const styles = StyleSheet.create({
     height: CARD_H,
     zIndex: 2,
   },
-  card: {
+  surface: {
     flex: 1,
-    borderRadius: 18,
-    borderWidth: 3,
-    borderColor: colors.brand.pink[400],
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-    shadowColor: colors.brand.pink[700],
-    shadowOpacity: 0.32,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 14,
+  },
+  cardFace: {
+    flex: 1,
     paddingVertical: spacing[4],
     paddingHorizontal: spacing[3],
   },
@@ -256,17 +257,19 @@ const styles = StyleSheet.create({
     top: 12,
     left: 12,
     alignItems: 'center',
+    zIndex: 2,
   },
   cornerBR: {
     position: 'absolute',
     bottom: 12,
     right: 12,
     alignItems: 'center',
+    zIndex: 2,
   },
   pipNum: {
     fontSize: 18,
     fontWeight: '900',
-    color: colors.brand.pink[600],
+    color: affect.delight.text,
     lineHeight: 20,
   },
   pipSuit: {
@@ -299,12 +302,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 2.5,
-    color: colors.brand.pink[500],
+    color: affect.delight.solid,
   },
   total: {
     fontSize: 72,
     fontWeight: '900',
-    color: colors.brand.pink[600],
+    color: affect.delight.text,
     lineHeight: 78,
   },
   sub: {
@@ -319,7 +322,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
   },
   btnPrimary: {
-    backgroundColor: colors.brand.pink[500],
+    backgroundColor: affect.delight.solid,
     minHeight: 46,
     borderRadius: radius.xl,
     alignItems: 'center',

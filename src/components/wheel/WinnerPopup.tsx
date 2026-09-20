@@ -18,8 +18,9 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 
+import { NeuSurface } from '../ui/NeuSurface';
 import { colors } from '../../theme/colors';
-import { neu } from '../../theme/neumorph';
+import { neu, affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 import { SPRINGS } from '../../constants/springs';
 
@@ -100,47 +101,57 @@ export function WinnerPopup({
   }));
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+    >
       <View style={styles.root} pointerEvents="box-none">
         <Animated.View style={[styles.backdrop, backdropStyle]} />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <Animated.View style={[styles.cardWrap, cardStyle]}>
-          <View style={styles.card}>
-            <View style={styles.cardInner}>
-              <Animated.View style={[styles.shine, shineStyle]} pointerEvents="none">
-                <View style={styles.shineBand} />
-              </Animated.View>
+          <NeuSurface
+            level="float"
+            borderRadius={radius['2xl']}
+            borderWidth={2.5}
+            borderColor={affect.reward.solidStrong}
+            backgroundColor={neu.card}
+            contentStyle={styles.cardFace}
+          >
+            <Animated.View style={[styles.shine, shineStyle]} pointerEvents="none">
+              <View style={styles.shineBand} />
+            </Animated.View>
 
-              <Text style={styles.badge}>YOU GOT</Text>
-              <Text style={styles.emoji}>{emoji}</Text>
-              <Text style={styles.label}>{label}</Text>
-              {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
+            <Text style={styles.badge}>YOU GOT</Text>
+            <Text style={styles.emoji}>{emoji}</Text>
+            <Text style={styles.label}>{label}</Text>
+            {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
 
-              <View style={styles.actions}>
-                {onSpinAgain ? (
-                  <Pressable
-                    onPress={onSpinAgain}
-                    style={({ pressed }) => [
-                      styles.btnPrimary,
-                      { opacity: pressed ? 0.9 : 1 },
-                    ]}
-                  >
-                    <Text style={styles.btnPrimaryText}>Spin again</Text>
-                  </Pressable>
-                ) : null}
+            <View style={styles.actions}>
+              {onSpinAgain ? (
                 <Pressable
-                  onPress={onClose}
+                  onPress={onSpinAgain}
                   style={({ pressed }) => [
-                    styles.btnGhost,
-                    { opacity: pressed ? 0.85 : 1 },
+                    styles.btnPrimary,
+                    { opacity: pressed ? 0.9 : 1 },
                   ]}
                 >
-                  <Text style={styles.btnGhostText}>Nice</Text>
+                  <Text style={styles.btnPrimaryText}>Spin again</Text>
                 </Pressable>
-              </View>
+              ) : null}
+              <Pressable
+                onPress={onClose}
+                style={({ pressed }) => [
+                  styles.btnGhost,
+                  { opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <Text style={styles.btnGhostText}>Nice</Text>
+              </Pressable>
             </View>
-          </View>
+          </NeuSurface>
         </Animated.View>
       </View>
     </Modal>
@@ -163,24 +174,11 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     zIndex: 2,
   },
-  card: {
-    borderRadius: radius['2xl'],
-    overflow: 'hidden',
-    borderWidth: 2.5,
-    borderColor: colors.brand.amber[400],
-    backgroundColor: '#FFFBEB',
-    shadowColor: colors.brand.amber[700],
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 12,
-  },
-  cardInner: {
+  cardFace: {
     paddingVertical: spacing[8],
     paddingHorizontal: spacing[6],
     alignItems: 'center',
     gap: spacing[2],
-    backgroundColor: '#FFFFFF',
   },
   shine: {
     position: 'absolute',
@@ -197,7 +195,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 2,
-    color: colors.brand.amber[700],
+    color: affect.reward.text,
   },
   emoji: {
     fontSize: 64,
@@ -221,7 +219,7 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   btnPrimary: {
-    backgroundColor: colors.brand.amber[500],
+    backgroundColor: affect.reward.solid,
     minHeight: 48,
     borderRadius: radius.xl,
     alignItems: 'center',
@@ -238,7 +236,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: colors.brand.amber[200],
+    borderColor: affect.reward.softBorder,
     backgroundColor: 'rgba(255,255,255,0.7)',
   },
   btnGhostText: {

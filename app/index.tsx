@@ -28,8 +28,9 @@ import { WafflrMark } from '../src/components/brand';
 import { WafflrWordmark } from '../src/components/brand';
 import { InstantPressable } from '../src/navigation/InstantPressable';
 import { AdBanner } from '../src/components/ads/AdBanner';
+import { NeuSurface } from '../src/components/ui/NeuSurface';
 import { colors } from '../src/theme/colors';
-import { neu } from '../src/theme/neumorph';
+import { neu, elevationStyle } from '../src/theme/neumorph';
 import { spacing, radius } from '../src/theme/tokens';
 import { SPRINGS } from '../src/constants/springs';
 
@@ -163,27 +164,31 @@ function TapGameCard({
   const progress = useEntranceProgress(entranceDelay);
   return (
     <BounceIn progress={progress} style={styles.cardSlot}>
-      <InstantPressable
-        onPress={onPress}
-        disabled={disabled}
-        accessibilityLabel={config.title}
-        style={[
-          styles.gameCard,
-          {
-            borderColor: config.accent,
-            opacity: disabled ? 0.55 : 1,
-          },
-        ]}
+      <NeuSurface
+        level="float"
+        borderRadius={radius['2xl']}
+        borderWidth={2.5}
+        borderColor={config.accent}
+        backgroundColor={neu.card}
+        style={{ opacity: disabled ? 0.55 : 1 }}
+        contentStyle={styles.gameCardFace}
       >
-        <View
-          style={[styles.cardGlow, { backgroundColor: config.accentSoft }]}
-        />
-        <Text style={styles.gameEmoji}>{config.emoji}</Text>
-        <Text style={styles.gameTitle}>{config.title}</Text>
-        <Text style={[styles.gameSub, { color: config.accent }]}>
-          {config.subtitle}
-        </Text>
-      </InstantPressable>
+        <InstantPressable
+          onPress={onPress}
+          disabled={disabled}
+          accessibilityLabel={config.title}
+          style={styles.gameCardPress}
+        >
+          <View
+            style={[styles.cardGlow, { backgroundColor: config.accentSoft }]}
+          />
+          <Text style={styles.gameEmoji}>{config.emoji}</Text>
+          <Text style={styles.gameTitle}>{config.title}</Text>
+          <Text style={[styles.gameSub, { color: config.accent }]}>
+            {config.subtitle}
+          </Text>
+        </InstantPressable>
+      </NeuSurface>
     </BounceIn>
   );
 }
@@ -385,11 +390,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[2],
     borderRadius: radius.full,
     backgroundColor: neu.card,
-    shadowColor: neu.shadow.color,
-    shadowOpacity: neu.shadow.opacity,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    borderWidth: 1.5,
+    borderColor: neu.borderSoft,
+    ...elevationStyle('soft'),
   },
   tagPillText: {
     fontSize: 15,
@@ -416,21 +419,15 @@ const styles = StyleSheet.create({
   cardSlot: {
     width: (SCREEN_W - spacing[4] * 2 - spacing[3]) / 2,
   },
-  gameCard: {
+  gameCardFace: {
     minHeight: 118,
-    borderRadius: radius['2xl'],
-    borderWidth: 2.5,
+  },
+  gameCardPress: {
+    minHeight: 118,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing[2],
     gap: 1,
-    overflow: 'hidden',
-    backgroundColor: neu.card,
-    shadowColor: neu.shadow.color,
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 3, height: 5 },
-    elevation: 4,
   },
   cardGlow: {
     position: 'absolute',
