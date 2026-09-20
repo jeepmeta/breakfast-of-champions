@@ -31,6 +31,7 @@ export type ExternalSpin = {
 type Props = {
   segments: WheelSegment[];
   size?: number;
+  onSpinStart?: () => void;
   onSpinEnd?: (segment: WheelSegment, index: number) => void;
   hideSpinButton?: boolean;
   externalSpin?: ExternalSpin | null;
@@ -71,6 +72,7 @@ function describeArc(
 export function WafflrWheel({
   segments,
   size = 300,
+  onSpinStart,
   onSpinEnd,
   hideSpinButton = false,
   externalSpin = null,
@@ -95,6 +97,8 @@ export function WafflrWheel({
   tickHapticsRef.current = tickHaptics;
   const settleHapticRef = useRef(settleHaptic);
   settleHapticRef.current = settleHaptic;
+  const onSpinStartRef = useRef(onSpinStart);
+  onSpinStartRef.current = onSpinStart;
 
   const totalWeight = useMemo(
     () => segments.reduce((sum, s) => sum + (s.weight ?? 1), 0) || 1,
@@ -165,6 +169,7 @@ export function WafflrWheel({
     (vel: number, startRot: number, withStartHaptic: boolean) => {
       setWinnerIndex(null);
       setIsSpinning(true);
+      onSpinStartRef.current?.();
       rotation.value = startRot;
       velocity.value = vel;
       lastTickAngle.value = startRot;
@@ -186,7 +191,6 @@ export function WafflrWheel({
     beginSpin(externalSpin.velocity, externalSpin.startRotation, spinStartHaptic);
   }, [externalSpin, beginSpin, spinStartHaptic]);
 
-  // Parent “Spin again” without remounting the wheel
   useEffect(() => {
     if (spinNonce === lastSpinNonceRef.current) return;
     if (spinNonce === 0) {
@@ -208,7 +212,6 @@ export function WafflrWheel({
     if (!spinning.value) return;
 
     let nextV = velocity.value * WHEEL_PHYSICS.friction;
-    // Extra stickiness when nearly stopped
     if (Math.abs(nextV) < WHEEL_PHYSICS.sticky_threshold) {
       nextV *= WHEEL_PHYSICS.sticky_friction;
     }
@@ -277,7 +280,6 @@ export function WafflrWheel({
                     stroke={colors.brand.slate[900]}
                     strokeWidth={2.5}
                   />
-                  {/* Large emoji — primary icon */}
                   {slice.emoji ? (
                     <SvgText
                       x={emojiPos.x}
@@ -291,7 +293,6 @@ export function WafflrWheel({
                       {slice.emoji}
                     </SvgText>
                   ) : null}
-                  {/* Label under emoji when segment is wide enough */}
                   {slice.sweep >= 28 ? (
                     <SvgText
                       x={labelPos.x}
@@ -331,7 +332,6 @@ export function WafflrWheel({
         </Svg>
       </Animated.View>
 
-      {/* Tap hub area via transparent overlay for accessibility */}
       {!hideSpinButton ? (
         <Pressable
           onPress={spin}
