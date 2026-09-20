@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlayChrome } from '../../src/components/play/PlayChrome';
+import { AdBanner } from '../../src/components/ads/AdBanner';
 import {
   DiceRoller,
   DiceCountPills,
@@ -42,7 +43,7 @@ export default function PlayDiceScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <PlayChrome title="Dice Roller" subtitle="Swipe the table to cast" />
 
       <View style={styles.stageWrap}>
@@ -68,6 +69,7 @@ export default function PlayDiceScreen() {
           )}
         </Pressable>
       </View>
+      <AdBanner />
     </SafeAreaView>
   );
 }
@@ -80,7 +82,7 @@ const styles = StyleSheet.create({
   stageWrap: {
     flex: 1,
     marginHorizontal: spacing[4],
-    minHeight: 280,
+    minHeight: 260,
   },
   footer: {
     paddingHorizontal: spacing[4],

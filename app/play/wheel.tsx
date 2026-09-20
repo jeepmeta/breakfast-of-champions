@@ -11,6 +11,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlayChrome } from '../../src/components/play/PlayChrome';
+import { AdBanner } from '../../src/components/ads/AdBanner';
 import {
   WafflrWheel,
   type WheelSegment,
@@ -116,7 +117,7 @@ export default function PlayWheelScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <PlayChrome title="Wafflr Wheel" subtitle={variation.question} />
 
       <View style={styles.stageWrap}>
@@ -168,7 +169,7 @@ export default function PlayWheelScreen() {
             <WafflrWheel
               key={`${topicId}-${variationId}-${wheelKey}`}
               segments={segments}
-              size={260}
+              size={250}
               onSpinEnd={onSpinEnd}
               hideResult
               tickHaptics={false}
@@ -196,6 +197,8 @@ export default function PlayWheelScreen() {
         </Pressable>
       </View>
 
+      <AdBanner />
+
       <WinnerPopup
         visible={popupOpen && !!winner}
         emoji={winner?.emoji ?? '✨'}
@@ -216,7 +219,7 @@ const styles = StyleSheet.create({
   stageWrap: {
     flex: 1,
     marginHorizontal: spacing[4],
-    minHeight: 280,
+    minHeight: 260,
   },
   stage: {
     flex: 1,
@@ -245,17 +248,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand.amber[500],
     borderColor: colors.brand.amber[600],
   },
-  topicEmoji: {
-    fontSize: 18,
-  },
+  topicEmoji: { fontSize: 18 },
   topicLabel: {
     fontSize: 12,
     fontWeight: '800',
     color: neu.text,
   },
-  topicLabelActive: {
-    color: colors.brand.slate[900],
-  },
+  topicLabelActive: { color: colors.brand.slate[900] },
   varRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -277,17 +276,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand.pink[100],
     borderColor: colors.brand.pink[500],
   },
-  varEmoji: {
-    fontSize: 13,
-  },
+  varEmoji: { fontSize: 13 },
   varLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: neu.text,
   },
-  varLabelActive: {
-    color: colors.brand.pink[700],
-  },
+  varLabelActive: { color: colors.brand.pink[700] },
   wheelWrap: {
     flex: 1,
     alignItems: 'center',
