@@ -1,7 +1,6 @@
 /**
- * Self-contained Three.js + Cannon-es dice table.
- * Adapted from https://codepen.io/Mant0uStudio/pen/ZYWywJB
- * Hard in-view bounds so dice never leave the stage.
+ * Three.js + Cannon-es dice table — swipe to cast, settle before result.
+ * Smaller dice / wider frustum; idle stack in lower-left with swipe hint.
  */
 export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
 <html>
@@ -10,8 +9,39 @@ export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #FFF8EB; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #FFF8EB; touch-action: none; }
   canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  #hint {
+    position: absolute; left: 14px; bottom: 16px;
+    pointer-events: none; z-index: 5;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    opacity: 1; transition: opacity 0.25s;
+  }
+  #hint.hide { opacity: 0; }
+  .bubble {
+    background: rgba(255,255,255,0.92);
+    border: 2px solid #F9A8D4;
+    border-radius: 18px;
+    padding: 8px 12px;
+    box-shadow: 0 6px 16px rgba(190,24,93,0.18);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-weight: 800; font-size: 12px; color: #9D174D;
+    letter-spacing: 0.3px;
+  }
+  .arrows {
+    display: flex; gap: 4px; padding-left: 6px;
+  }
+  .arrows span {
+    display: inline-block;
+    color: #EC4899; font-size: 16px; font-weight: 900;
+    animation: pulse 1s ease-in-out infinite;
+  }
+  .arrows span:nth-child(2) { animation-delay: 0.12s; }
+  .arrows span:nth-child(3) { animation-delay: 0.24s; }
+  @keyframes pulse {
+    0%, 100% { transform: translate(0,0); opacity: 0.45; }
+    50% { transform: translate(5px, -5px); opacity: 1; }
+  }
 </style>
 <script type="importmap">
 {
@@ -24,6 +54,10 @@ export const PHYSICS_DICE_HTML = `<!DOCTYPE html>
 </script>
 </head>
 <body>
+<div id="hint">
+  <div class="bubble">Swipe to roll</div>
+  <div class="arrows"><span>↗</span><span>↗</span><span>↗</span></div>
+</div>
 <script type="module">
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
@@ -33,20 +67,22 @@ let scene, camera, renderer, world;
 let diceObjects = [];
 let needsResultCheck = false;
 let isRolling = false;
-const FRUSTUM_SIZE = 20;
-const WALL = 7.5;
-const CLAMP = 6.8;
-const BOX = 2.4;
+let settleFrames = 0;
+
+// Zoomed-out stage, smaller dice
+const FRUSTUM_SIZE = 28;
+const WALL = 9.5;
+const CLAMP = 8.6;
+const BOX = 1.65;
+const IDLE_ORIGIN = { x: -5.2, z: 4.6, y: BOX / 2 + 0.08 };
 
 const palette = [
   "#F59E0B", "#EC4899", "#10B981", "#FBBF24",
   "#F472B6", "#34D399", "#FFFFFF", "#D97706"
 ];
-const commonColors = {
-  dots: "#FFFFFF",
-  outline: "#1E293B",
-  shadow: "#F59E0B"
-};
+const commonColors = { dots: "#FFFFFF", outline: "#1E293B", shadow: "#F59E0B" };
+
+const hintEl = document.getElementById("hint");
 
 function post(msg) {
   try {
@@ -54,6 +90,12 @@ function post(msg) {
       window.ReactNativeWebView.postMessage(JSON.stringify(msg));
     }
   } catch (e) {}
+}
+
+function setHintVisible(v) {
+  if (!hintEl) return;
+  if (v) hintEl.classList.remove("hide");
+  else hintEl.classList.add("hide");
 }
 
 function init() {
@@ -69,7 +111,7 @@ function init() {
     1,
     1000
   );
-  camera.position.set(48, 48, 48);
+  camera.position.set(52, 52, 52);
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -79,7 +121,7 @@ function init() {
   document.body.appendChild(renderer.domElement);
 
   world = new CANNON.World();
-  world.gravity.set(0, -42, 0);
+  world.gravity.set(0, -48, 0);
   world.broadphase = new CANNON.NaiveBroadphase();
   world.solver.iterations = 24;
   world.allowSleep = true;
@@ -88,13 +130,14 @@ function init() {
   const diceMat = new CANNON.Material("dice");
   world.addContactMaterial(
     new CANNON.ContactMaterial(wallMat, diceMat, {
-      friction: 0.35,
-      restitution: 0.45,
+      friction: 0.4,
+      restitution: 0.38,
     })
   );
 
   createPhysicsWalls(wallMat);
-  updateDiceCount(1);
+  updateDiceCount(2);
+  bindSwipe();
 
   window.addEventListener("resize", onWindowResize);
   post({ type: "ready" });
@@ -109,7 +152,7 @@ function createPhysicsWalls(material) {
 
   const ceil = new CANNON.Body({ mass: 0, material });
   ceil.addShape(new CANNON.Plane());
-  ceil.position.set(0, 16, 0);
+  ceil.position.set(0, 14, 0);
   ceil.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
   world.addBody(ceil);
 
@@ -142,9 +185,7 @@ function createVectorDiceTexture(number, colorHex) {
 
   const isWhite = colorHex === "#FFFFFF";
   let dotColor = commonColors.dots;
-  if (isWhite) {
-    dotColor = number === 1 || number === 4 ? "#E11D48" : "#1E293B";
-  }
+  if (isWhite) dotColor = number === 1 || number === 4 ? "#E11D48" : "#1E293B";
   ctx.fillStyle = dotColor;
   const dotSize = size / 5;
   const current = isWhite && number === 1 ? dotSize * 1.45 : dotSize;
@@ -165,8 +206,22 @@ function createVectorDiceTexture(number, colorHex) {
   return new THREE.CanvasTexture(canvas);
 }
 
+function placeIdle(body, i, count) {
+  const col = i % 3;
+  const row = Math.floor(i / 3);
+  body.position.set(
+    IDLE_ORIGIN.x + col * (BOX + 0.25),
+    IDLE_ORIGIN.y + row * (BOX + 0.15),
+    IDLE_ORIGIN.z + row * 0.35
+  );
+  body.velocity.set(0, 0, 0);
+  body.angularVelocity.set(0, 0, 0);
+  body.quaternion.setFromEuler(0, (i * 0.4) % Math.PI, 0);
+  body.sleep();
+}
+
 function updateDiceCount(count) {
-  count = Math.max(1, Math.min(5, count | 0));
+  count = Math.max(1, Math.min(6, count | 0));
   diceObjects.forEach((obj) => {
     scene.remove(obj.mesh);
     scene.remove(obj.outline);
@@ -182,10 +237,11 @@ function updateDiceCount(count) {
   diceObjects = [];
   needsResultCheck = false;
   isRolling = false;
+  settleFrames = 0;
 
-  const geometry = new RoundedBoxGeometry(BOX, BOX, BOX, 4, 0.35);
+  const geometry = new RoundedBoxGeometry(BOX, BOX, BOX, 4, 0.32);
   const outlineGeo = geometry.clone();
-  const shadowGeo = new THREE.CircleGeometry(BOX * 0.55, 32);
+  const shadowGeo = new THREE.CircleGeometry(BOX * 0.5, 32);
   const shape = new CANNON.Box(new CANNON.Vec3(BOX / 2, BOX / 2, BOX / 2));
   const outlineMat = new THREE.MeshBasicMaterial({
     color: commonColors.outline,
@@ -194,7 +250,7 @@ function updateDiceCount(count) {
   const shadowMat = new THREE.MeshBasicMaterial({
     color: commonColors.shadow,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.2,
   });
 
   for (let i = 0; i < count; i++) {
@@ -221,38 +277,36 @@ function updateDiceCount(count) {
     shadow.position.y = 0.01;
     scene.add(shadow);
 
-    const startX = (i - (count - 1) / 2) * 2.8;
     const body = new CANNON.Body({
-      mass: 5,
+      mass: 4,
       shape,
-      position: new CANNON.Vec3(startX, BOX + 0.15, 0),
-      sleepSpeedLimit: 0.45,
-      linearDamping: 0.12,
-      angularDamping: 0.12,
+      sleepSpeedLimit: 0.35,
+      linearDamping: 0.14,
+      angularDamping: 0.16,
     });
-    body.quaternion.setFromEuler(
-      Math.random() * Math.PI,
-      Math.random() * Math.PI,
-      Math.random() * Math.PI
-    );
+    placeIdle(body, i, count);
     world.addBody(body);
     diceObjects.push({ mesh, outline, shadow, body });
   }
+  setHintVisible(true);
   post({ type: "count", count });
+  post({ type: "idle" });
 }
 
-function applyThrowForce(body) {
-  const towardCenterX = -body.position.x * 1.1;
-  const towardCenterZ = -body.position.z * 1.1;
+function applySwipeForce(body, dirX, dirZ, strength) {
+  const s = Math.max(0.45, Math.min(1.6, strength));
+  // Map screen swipe → table axes (isometric)
+  const vx = dirX * 18 * s + dirZ * 6 * s;
+  const vz = -dirX * 6 * s + dirZ * 16 * s;
   body.velocity.set(
-    towardCenterX + (Math.random() - 0.5) * 8,
-    6 + Math.random() * 8,
-    towardCenterZ + (Math.random() - 0.5) * 8
+    vx + (Math.random() - 0.5) * 3,
+    7 + 6 * s + Math.random() * 3,
+    vz + (Math.random() - 0.5) * 3
   );
   body.angularVelocity.set(
-    (Math.random() - 0.5) * 28,
-    (Math.random() - 0.5) * 28,
-    (Math.random() - 0.5) * 28
+    (Math.random() - 0.5) * 30 * s,
+    (Math.random() - 0.5) * 30 * s,
+    (Math.random() - 0.5) * 30 * s
   );
 }
 
@@ -261,38 +315,73 @@ function clampBody(body) {
   let z = body.position.z;
   let y = body.position.y;
   let hit = false;
-  if (x > CLAMP) { x = CLAMP; body.velocity.x *= -0.35; hit = true; }
-  if (x < -CLAMP) { x = -CLAMP; body.velocity.x *= -0.35; hit = true; }
-  if (z > CLAMP) { z = CLAMP; body.velocity.z *= -0.35; hit = true; }
-  if (z < -CLAMP) { z = -CLAMP; body.velocity.z *= -0.35; hit = true; }
-  if (y > 14) { y = 14; body.velocity.y *= -0.2; hit = true; }
-  if (y < BOX / 2) { y = BOX / 2; }
+  if (x > CLAMP) { x = CLAMP; body.velocity.x *= -0.3; hit = true; }
+  if (x < -CLAMP) { x = -CLAMP; body.velocity.x *= -0.3; hit = true; }
+  if (z > CLAMP) { z = CLAMP; body.velocity.z *= -0.3; hit = true; }
+  if (z < -CLAMP) { z = -CLAMP; body.velocity.z *= -0.3; hit = true; }
+  if (y > 12) { y = 12; body.velocity.y *= -0.2; hit = true; }
+  if (y < BOX / 2) y = BOX / 2;
   if (hit) body.position.set(x, y, z);
 }
 
-function rollDice() {
+function castSwipe(dx, dy, speed) {
   if (isRolling) return;
+  // Normalize direction from screen delta (right+, down+)
+  const len = Math.hypot(dx, dy) || 1;
+  const dirX = dx / len;
+  const dirY = dy / len;
+  // Up-swipe on screen → positive table throw
+  const dirZ = -dirY;
+  const strength = Math.max(0.5, Math.min(1.7, speed / 900));
+
   isRolling = true;
   needsResultCheck = false;
+  settleFrames = 0;
+  setHintVisible(false);
   post({ type: "rolling" });
 
   diceObjects.forEach((obj, i) => {
     const body = obj.body;
     body.wakeUp();
-    const startX = (i - (diceObjects.length - 1) / 2) * 2.4;
-    body.position.set(
-      Math.max(-CLAMP + 0.5, Math.min(CLAMP - 0.5, startX + (Math.random() - 0.5) * 0.8)),
-      8 + Math.random() * 3,
-      (Math.random() - 0.5) * 1.2
-    );
-    body.velocity.set(0, 0, 0);
-    body.angularVelocity.set(0, 0, 0);
-    applyThrowForce(body);
+    // Slight stagger from idle cluster
+    body.position.x += (Math.random() - 0.5) * 0.4;
+    body.position.y = Math.max(body.position.y, BOX + 0.5);
+    body.position.z += (Math.random() - 0.5) * 0.4;
+    applySwipeForce(body, dirX + (Math.random() - 0.5) * 0.15, dirZ + (Math.random() - 0.5) * 0.15, strength);
   });
 
   setTimeout(() => {
     needsResultCheck = true;
-  }, 550);
+  }, 500);
+}
+
+function resetTable() {
+  needsResultCheck = false;
+  isRolling = false;
+  settleFrames = 0;
+  diceObjects.forEach((obj, i) => placeIdle(obj.body, i, diceObjects.length));
+  setHintVisible(true);
+  post({ type: "idle" });
+}
+
+function isSettledFlat(body, mesh) {
+  const lin = body.velocity.lengthSquared();
+  const ang = body.angularVelocity.lengthSquared();
+  if (lin > 0.08 || ang > 0.08) return false;
+  if (body.position.y > BOX / 2 + 0.35) return false;
+
+  // Face nearly axis-aligned with world up
+  const faceNormals = [
+    new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+    new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
+    new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+  ];
+  let maxY = -Infinity;
+  faceNormals.forEach((n) => {
+    const w = n.clone().applyQuaternion(mesh.quaternion);
+    if (w.y > maxY) maxY = w.y;
+  });
+  return maxY > 0.92;
 }
 
 function calculateResult() {
@@ -324,6 +413,39 @@ function calculateResult() {
   post({ type: "result", total, details });
 }
 
+function bindSwipe() {
+  let startX = 0, startY = 0, startT = 0, tracking = false;
+
+  const onStart = (x, y) => {
+    if (isRolling) return;
+    tracking = true;
+    startX = x;
+    startY = y;
+    startT = performance.now();
+  };
+  const onEnd = (x, y) => {
+    if (!tracking || isRolling) return;
+    tracking = false;
+    const dx = x - startX;
+    const dy = y - startY;
+    const dt = Math.max(16, performance.now() - startT);
+    const dist = Math.hypot(dx, dy);
+    if (dist < 28) return;
+    const speed = (dist / dt) * 1000;
+    castSwipe(dx, dy, speed);
+  };
+
+  window.addEventListener("touchstart", (e) => {
+    if (e.touches[0]) onStart(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  window.addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0];
+    if (t) onEnd(t.clientX, t.clientY);
+  });
+  window.addEventListener("mousedown", (e) => onStart(e.clientX, e.clientY));
+  window.addEventListener("mouseup", (e) => onEnd(e.clientX, e.clientY));
+}
+
 function animate() {
   requestAnimationFrame(animate);
   world.step(1 / 60);
@@ -338,24 +460,25 @@ function animate() {
     shadow.position.x = body.position.x;
     shadow.position.z = body.position.z;
     const height = Math.max(0, body.position.y - 1);
-    const scale = Math.max(0.5, 1 - height * 0.04);
-    const opacity = Math.max(0, 0.22 - height * 0.01);
-    shadow.scale.setScalar(scale);
-    shadow.material.opacity = opacity;
+    shadow.scale.setScalar(Math.max(0.5, 1 - height * 0.04));
+    shadow.material.opacity = Math.max(0, 0.2 - height * 0.01);
   }
 
   if (needsResultCheck) {
-    let allStopped = true;
+    let allFlat = true;
     for (const o of diceObjects) {
-      if (
-        o.body.velocity.lengthSquared() > 0.12 ||
-        o.body.angularVelocity.lengthSquared() > 0.12
-      ) {
-        allStopped = false;
+      if (!isSettledFlat(o.body, o.mesh)) {
+        allFlat = false;
         break;
       }
     }
-    if (allStopped) calculateResult();
+    if (allFlat) {
+      settleFrames += 1;
+      // Require a few stable frames so they truly sit flat
+      if (settleFrames >= 8) calculateResult();
+    } else {
+      settleFrames = 0;
+    }
   }
 
   renderer.render(scene, camera);
@@ -372,7 +495,8 @@ function onWindowResize() {
 }
 
 window.wafflrSetCount = updateDiceCount;
-window.wafflrRoll = rollDice;
+window.wafflrReset = resetTable;
+window.wafflrSwipe = castSwipe;
 
 init();
 </script>
