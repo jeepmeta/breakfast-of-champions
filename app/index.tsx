@@ -36,6 +36,7 @@ import { spacing, radius } from '../src/theme/tokens';
 import { SPRINGS } from '../src/constants/springs';
 
 const SCREEN_W = Dimensions.get('window').width;
+const CARD_W = (SCREEN_W - spacing[4] * 2 - spacing[3]) / 2;
 
 let homeEntrancePlayed = false;
 
@@ -324,8 +325,9 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <NoiseOverlay opacity={0.045} frequency={0.85} />
+      <NoiseOverlay opacity={0.04} />
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         bounces={false}
@@ -368,6 +370,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: neu.canvas,
+  },
+  scrollView: {
+    flex: 1,
+    zIndex: 1,
   },
   scroll: {
     paddingHorizontal: spacing[4],
@@ -419,12 +425,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardSlot: {
-    width: (SCREEN_W - spacing[4] * 2 - spacing[3]) / 2,
+    width: CARD_W,
   },
   gameCardFace: {
     minHeight: 118,
+    width: '100%',
   },
   gameCardPress: {
+    width: '100%',
     minHeight: 118,
     alignItems: 'center',
     justifyContent: 'center',

@@ -11,10 +11,6 @@ export type ShadowLayer = {
 
 export type ElevationName = 'flat' | 'soft' | 'card' | 'float' | 'cta' | 'inset';
 
-/**
- * Multi-layer shadow recipes.
- * Light assumed from top-left → dark drifts bottom-right, highlight opposite.
- */
 export const shadowLayers: Record<ElevationName, ShadowLayer[]> = {
   flat: [],
 
@@ -63,7 +59,6 @@ export const shadowLayers: Record<ElevationName, ShadowLayer[]> = {
     },
   ],
 
-  /** Candy CTA — amber-tinted lift (reward / approach) */
   cta: [
     {
       offsetX: 0,
@@ -79,7 +74,6 @@ export const shadowLayers: Record<ElevationName, ShadowLayer[]> = {
     },
   ],
 
-  /** Pressed / well — dual inset (light + dark) */
   inset: [
     {
       offsetX: 3,
@@ -117,10 +111,8 @@ function layersToBoxShadow(layers: ShadowLayer[]): string {
 }
 
 /**
- * Cross-platform style from a named elevation.
- * - New Arch / web: full multi-layer via `boxShadow` string
- * - Classic iOS: maps to strongest outer layer
- * - Android: matching elevation
+ * Elevation style — classic shadow* on native; multi-layer boxShadow on web only.
+ * Avoids invalid boxShadow strings breaking native layout.
  */
 export function elevationStyle(name: ElevationName): ViewStyle {
   const layers = shadowLayers[name];
@@ -131,7 +123,6 @@ export function elevationStyle(name: ElevationName): ViewStyle {
   }
 
   const outer = layers.find((l) => !l.inset) ?? layers[0];
-  // Approximate opacity from rgba if present; keep soft default
   const opacity =
     name === 'cta' ? 0.22 : name === 'float' ? 0.16 : name === 'soft' ? 0.08 : 0.12;
 
@@ -143,23 +134,20 @@ export function elevationStyle(name: ElevationName): ViewStyle {
     elevation,
   };
 
-  // boxShadow string works on web + New Architecture native
-  const withBox: ViewStyle = {
-    ...classic,
-    // @ts-expect-error RN New Arch / web
-    boxShadow: layersToBoxShadow(layers),
-  };
-
   if (Platform.OS === 'web') {
-    return withBox;
+    return {
+      ...classic,
+      // @ts-expect-error web / New Arch
+      boxShadow: layersToBoxShadow(layers),
+    };
   }
 
-  // Native: keep classic + boxShadow when New Arch supports it (harmless if ignored)
-  return withBox;
+  return classic;
 }
 
-/** Ambient host style for nested dual-layer (outer soft shell). */
-export function ambientHost(name: Exclude<ElevationName, 'flat' | 'inset'>): ViewStyle {
+export function ambientHost(
+  name: Exclude<ElevationName, 'flat' | 'inset'>,
+): ViewStyle {
   const layers = shadowLayers[name];
   const ambient = layers[layers.length - 1] ?? layers[0];
   return {
@@ -172,13 +160,17 @@ export function ambientHost(name: Exclude<ElevationName, 'flat' | 'inset'>): Vie
   };
 }
 
-/** Contact face style for nested dual-layer (tight near-edge shadow). */
-export function contactFace(name: Exclude<ElevationName, 'flat' | 'inset'>): ViewStyle {
+export function contactFace(
+  name: Exclude<ElevationName, 'flat' | 'inset'>,
+): ViewStyle {
   const layers = shadowLayers[name];
   const contact = layers[0];
   return {
     shadowColor: '#78350F',
-    shadowOffset: { width: contact.offsetX, height: Math.max(1, contact.offsetY) },
+    shadowOffset: {
+      width: contact.offsetX,
+      height: Math.max(1, contact.offsetY),
+    },
     shadowOpacity: 0.07,
     shadowRadius: Math.max(3, contact.blurRadius * 0.5),
     elevation: Math.max(1, ELEVATION[name] - 2),

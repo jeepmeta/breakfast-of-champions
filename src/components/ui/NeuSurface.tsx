@@ -11,7 +11,6 @@ type Level = Exclude<ElevationName, 'flat' | 'inset'>;
 
 type Props = {
   children: React.ReactNode;
-  /** soft | card | float | cta */
   level?: Level;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
@@ -22,9 +21,8 @@ type Props = {
 };
 
 /**
- * True multi-layer depth via nested views:
- * outer ambient shell + inner contact face.
- * Works on all RN platforms without New Arch boxShadow.
+ * Nested ambient + contact shadows. Outer shell always fills parent width
+ * so grid cards don't collapse.
  */
 export function NeuSurface({
   children,
@@ -40,7 +38,12 @@ export function NeuSurface({
     <View
       style={[
         ambientHost(level),
-        { borderRadius: borderRadius + 2, backgroundColor: 'transparent' },
+        {
+          borderRadius: borderRadius + 2,
+          backgroundColor: 'transparent',
+          width: '100%',
+          alignSelf: 'stretch',
+        },
         style,
       ]}
     >
@@ -53,6 +56,7 @@ export function NeuSurface({
             borderWidth,
             borderColor,
             overflow: 'hidden',
+            width: '100%',
           },
           contentStyle,
         ]}
