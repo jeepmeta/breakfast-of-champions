@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
@@ -16,7 +16,7 @@ export function DiceRoller({
   count = 2,
   onCountConsumed,
 }: {
-  count?: DiceCount;
+  count?: debCount;
   onCountConsumed?: () => void;
 }) {
   const webRef = useRef<WebView>(null);
@@ -32,12 +32,10 @@ export function DiceRoller({
     webRef.current?.injectJavaScript(`${js}; true;`);
   }, []);
 
-  // Sync count from parent pills
-  const prevCount = useRef<DiceCount | null>(null);
-  if (ready && prevCount.current !== count) {
-    prevCount.current = count;
+  useEffect(() => {
+    if (!ready) return;
     inject(`window.wafflrSetCount && window.wafflrSetCount(${count})`);
-  }
+  }, [count, ready, inject]);
 
   const onMessage = useCallback(
     (e: WebViewMessageEvent) => {
@@ -127,7 +125,6 @@ export function DiceRoller({
   );
 }
 
-/** Full-width 1–6 count pills for the play screen footer. */
 export function DiceCountPills({
   count,
   onChange,
@@ -166,10 +163,7 @@ export function DiceCountPills({
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    width: '100%',
-  },
+  root: { flex: 1, width: '100%' },
   stage: {
     flex: 1,
     width: '100%',
@@ -179,24 +173,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: neu.borderSoft,
   },
-  web: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  webContainer: {
-    flex: 1,
-    backgroundColor: neu.canvas,
-  },
+  web: { flex: 1, backgroundColor: 'transparent' },
+  webContainer: { flex: 1, backgroundColor: neu.canvas },
   loading: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: neu.canvas,
   },
-  loadingText: {
-    fontWeight: '700',
-    color: neu.muted,
-  },
+  loadingText: { fontWeight: '700', color: neu.muted },
   rollingBadge: {
     position: 'absolute',
     top: 12,
@@ -215,11 +200,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.brand.pink[600],
   },
-  pills: {
-    flexDirection: 'row',
-    gap: spacing[2],
-    width: '100%',
-  },
+  pills: { flexDirection: 'row', gap: spacing[2], width: '100%' },
   pill: {
     flex: 1,
     height: 44,
@@ -234,15 +215,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand.pink[100],
     borderColor: colors.brand.pink[500],
   },
-  pillDisabled: {
-    opacity: 0.5,
-  },
-  pillText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: neu.text,
-  },
-  pillTextActive: {
-    color: colors.brand.pink[700],
-  },
+  pillDisabled: { opacity: 0.5 },
+  pillText: { fontSize: 16, fontWeight: '800', color: neu.text },
+  pillTextActive: { color: colors.brand.pink[700] },
 });
