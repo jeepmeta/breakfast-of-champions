@@ -29,6 +29,7 @@ import { WafflrWordmark } from '../src/components/brand';
 import { InstantPressable } from '../src/navigation/InstantPressable';
 import { AdBanner } from '../src/components/ads/AdBanner';
 import { NeuSurface } from '../src/components/ui/NeuSurface';
+import { NoiseOverlay } from '../src/components/ui/NoiseOverlay';
 import { colors } from '../src/theme/colors';
 import { neu, elevationStyle } from '../src/theme/neumorph';
 import { spacing, radius } from '../src/theme/tokens';
@@ -323,6 +324,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <NoiseOverlay opacity={0.045} frequency={0.85} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
