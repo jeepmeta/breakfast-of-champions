@@ -24,12 +24,10 @@ import {
   roomFromRightOptions,
   profileOptions,
   settingsOptions,
-  modalOptions,
 } from '../src/navigation/transitions';
+import { affect } from '../src/theme/affect';
 
-SplashScreen.preventAutoHideAsync().catch(() => {
-  // ignore if already prevented
-});
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -39,9 +37,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => {
-        // ignore
-      });
+      SplashScreen.hideAsync().catch(() => undefined);
     }
   }, [fontsLoaded, fontError]);
 
@@ -57,7 +53,6 @@ export default function RootLayout() {
             <StatusBar style="dark" />
             <Stack screenOptions={stackScreenDefaults}>
               <Stack.Screen name="index" options={{ animation: 'none' }} />
-              {/* Home grid columns: L Dice/Room/Profile · R Wheel/Bracket/Settings */}
               <Stack.Screen name="play/dice" options={playDiceOptions} />
               <Stack.Screen name="play/wheel" options={playWheelOptions} />
               <Stack.Screen name="room/[code]" options={roomFromLeftOptions} />
@@ -67,7 +62,11 @@ export default function RootLayout() {
               />
               <Stack.Screen name="profile" options={profileOptions} />
               <Stack.Screen name="settings" options={settingsOptions} />
-              <Stack.Screen name="solo/wheel" options={modalOptions} />
+              {/* Legacy redirects */}
+              <Stack.Screen
+                name="solo/wheel"
+                options={{ animation: 'none', headerShown: false }}
+              />
               <Stack.Screen
                 name="(tabs)"
                 options={{ animation: 'none', headerShown: false }}
@@ -83,6 +82,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FFF8EB',
+    backgroundColor: affect.comfort.canvas,
   },
 });

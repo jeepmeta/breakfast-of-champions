@@ -1,12 +1,5 @@
-import { useEffect, useMemo, useCallback } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-} from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useEffect, useMemo } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,12 +8,13 @@ import Animated, {
   withDelay,
   withSequence,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 
+import { ResultPopup } from '../ui/ResultPopup';
 import { colors } from '../../theme/colors';
 import { neu, affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
 import { SPRINGS } from '../../constants/springs';
+import { haptic } from '../../lib/haptics';
 
 type Props = {
   visible: boolean;
@@ -31,10 +25,6 @@ type Props = {
   onSpinAgain?: () => void;
 };
 
-const CARD_W = 248;
-const CARD_H = 380;
-
-/** Playing-card result — fixed shell, reliable RN Pressable CTAs. */
 export function WinnerPopup({
   visible,
   emoji,
@@ -43,15 +33,11 @@ export function WinnerPopup({
   onClose,
   onSpinAgain,
 }: Props) {
-  const cardOpacity = useSharedValue(0);
-  const cardScale = useSharedValue(0.9);
   const centerScale = useSharedValue(0.7);
   const centerOp = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      cardOpacity.value = withTiming(1, { duration: 140 });
-      cardScale.value = withSpring(1, SPRINGS.bouncy);
       centerOp.value = withDelay(80, withTiming(1, { duration: 120 }));
       centerScale.value = withDelay(
         80,
@@ -61,35 +47,10 @@ export function WinnerPopup({
         ),
       );
     } else {
-      cardOpacity.value = 0;
-      cardScale.value = 0.9;
       centerOp.value = 0;
       centerScale.value = 0.7;
     }
-  }, [visible, cardOpacity, cardScale, centerOp, centerScale]);
-
-  const close = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-      () => undefined,
-    );
-    onClose();
-  }, [onClose]);
-
-  const spinAgain = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-      () => undefined,
-    );
-    onSpinAgain?.();
-  }, [onSpinAgain]);
-
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: cardOpacity.value * 0.55,
-  }));
-
-  const cardStyle = useAnimatedStyle(() => ({
-    opacity: cardOpacity.value,
-    transform: [{ scale: cardScale.value }],
-  }));
+  }, [visible, centerOp, centerScale]);
 
   const centerStyle = useAnimatedStyle(() => ({
     opacity: centerOp.value,
@@ -99,120 +60,61 @@ export function WinnerPopup({
   const pip = useMemo(() => emoji.slice(0, 2), [emoji]);
 
   return (
-    <Modal
+    <ResultPopup
       visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={close}
+      onDismiss={onClose}
+      width={248}
+      height={380}
+      borderColor={affect.reward.solidStrong}
     >
-      <GestureHandlerRootView style={styles.flex}>
-        <View style={styles.root}>
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.backdrop, backdropStyle]}
-          />
+      <View style={styles.cornerTL} pointerEvents="none">
+        <Text style={styles.pipEmoji}>{pip}</Text>
+      </View>
+      <View style={styles.cornerBR} pointerEvents="none">
+        <Text style={[styles.pipEmoji, styles.pipFlip]}>{pip}</Text>
+      </View>
 
+      <Animated.View style={[styles.center, centerStyle]} pointerEvents="none">
+        <Text style={styles.badge}>YOU GOT</Text>
+        <Text style={styles.emoji}>{emoji}</Text>
+        <Text style={styles.label}>{label}</Text>
+        {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
+      </Animated.View>
+
+      <View style={styles.actions}>
+        {onSpinAgain ? (
           <Pressable
-            style={styles.dismissHit}
-            onPress={close}
-            accessibilityLabel="Dismiss result"
-          />
-
-          <Animated.View style={[styles.cardShell, cardStyle]}>
-            <View style={styles.card}>
-              <View style={styles.cornerTL} pointerEvents="none">
-                <Text style={styles.pipEmoji}>{pip}</Text>
-              </View>
-              <View style={styles.cornerBR} pointerEvents="none">
-                <Text style={[styles.pipEmoji, styles.pipFlip]}>{pip}</Text>
-              </View>
-
-              <Animated.View style={[styles.center, centerStyle]} pointerEvents="none">
-                <Text style={styles.badge}>YOU GOT</Text>
-                <Text style={styles.emoji}>{emoji}</Text>
-                <Text style={styles.label}>{label}</Text>
-                {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
-              </Animated.View>
-
-              <View style={styles.actions}>
-                {onSpinAgain ? (
-                  <Pressable
-                    onPress={spinAgain}
-                    hitSlop={10}
-                    style={({ pressed }) => [
-                      styles.btnPrimary,
-                      pressed && styles.btnPressed,
-                    ]}
-                  >
-                    <Text style={styles.btnPrimaryText}>Spin again</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  onPress={close}
-                  hitSlop={10}
-                  style={({ pressed }) => [
-                    styles.btnGhost,
-                    pressed && styles.btnPressed,
-                  ]}
-                >
-                  <Text style={styles.btnGhostText}>Nice</Text>
-                </Pressable>
-              </View>
-            </View>
-          </Animated.View>
-        </View>
-      </GestureHandlerRootView>
-    </Modal>
+            onPress={() => {
+              haptic.medium();
+              onSpinAgain();
+            }}
+            hitSlop={10}
+            style={({ pressed }) => [
+              styles.btnPrimary,
+              pressed && styles.btnPressed,
+            ]}
+          >
+            <Text style={styles.btnPrimaryText}>Spin again</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          onPress={onClose}
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.btnGhost,
+            pressed && styles.btnPressed,
+          ]}
+        >
+          <Text style={styles.btnGhostText}>Nice</Text>
+        </Pressable>
+      </View>
+    </ResultPopup>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  root: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.brand.slate[900],
-  },
-  dismissHit: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
-  },
-  cardShell: {
-    width: CARD_W,
-    height: CARD_H,
-    zIndex: 2,
-  },
-  card: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 18,
-    borderWidth: 3,
-    borderColor: affect.reward.solidStrong,
-    backgroundColor: '#FFFFFF',
-    paddingTop: spacing[5],
-    paddingHorizontal: spacing[3],
-    paddingBottom: spacing[4],
-    shadowColor: '#78350F',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.28,
-    shadowRadius: 20,
-    elevation: 16,
-  },
-  cornerTL: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-  },
-  cornerBR: {
-    position: 'absolute',
-    bottom: 14,
-    right: 14,
-  },
+  cornerTL: { position: 'absolute', top: 14, left: 14 },
+  cornerBR: { position: 'absolute', bottom: 14, right: 14 },
   pipEmoji: { fontSize: 22 },
   pipFlip: { transform: [{ rotate: '180deg' }] },
   center: {
@@ -227,10 +129,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2.5,
     color: affect.reward.text,
   },
-  emoji: {
-    fontSize: 56,
-    marginVertical: spacing[1],
-  },
+  emoji: { fontSize: 56, marginVertical: spacing[1] },
   label: {
     fontSize: 24,
     fontWeight: '900',

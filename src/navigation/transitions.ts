@@ -1,8 +1,14 @@
 import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
 import { Platform } from 'react-native';
 
+import { affect } from '../theme/affect';
+
 /** Target duration for push/pop (ms). Keep ≤200 for instant feel. */
 export const TRANSITION_MS = 180;
+
+const contentStyle = {
+  backgroundColor: affect.comfort.canvas,
+};
 
 /**
  * Shared native-stack defaults — lean on react-native-screens for 60fps
@@ -19,9 +25,7 @@ export const stackScreenDefaults: NativeStackNavigationOptions = {
   gestureEnabled: true,
   fullScreenGestureEnabled: true,
   freezeOnBlur: true,
-  contentStyle: {
-    backgroundColor: '#FFF8EB',
-  },
+  contentStyle,
 };
 
 /**
@@ -52,9 +56,6 @@ export const profileOptions = fromLeftOptions;
 export const playWheelOptions = fromRightOptions;
 export const roomFromRightOptions = fromRightOptions;
 export const settingsOptions = fromRightOptions;
-
-/** @deprecated use roomFromLeftOptions / roomFromRightOptions */
-export const roomOptions = fromRightOptions;
 
 export const modalOptions: NativeStackNavigationOptions = {
   ...stackScreenDefaults,
