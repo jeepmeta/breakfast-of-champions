@@ -30,6 +30,9 @@ const CHEERS = [
   'Golden!',
 ] as const;
 
+const CARD_W = 248;
+const CARD_H = 380;
+
 type Props = {
   visible: boolean;
   total: number;
@@ -84,10 +87,11 @@ export function DiceResultPopup({
     <ResultPopup
       visible={visible}
       onDismiss={onDismiss}
-      width={232}
-      height={360}
-      borderColor={affect.delight.softBorder}
+      width={CARD_W}
+      height={CARD_H}
+      borderColor={affect.delight.solid}
     >
+      {/* Corner pips */}
       <View style={styles.cornerTL} pointerEvents="none">
         <Text style={styles.pipNum}>{total}</Text>
         <Text style={styles.pipSuit}>🎲</Text>
@@ -97,6 +101,7 @@ export function DiceResultPopup({
         <Text style={[styles.pipSuit, styles.pipFlip]}>🎲</Text>
       </View>
 
+      {/* Center — fixed min height, not flex-collapse-prone */}
       <View style={styles.center} pointerEvents="none">
         <Text style={styles.badge}>TOTAL</Text>
         <Animated.Text style={[styles.total, totalStyle]}>{total}</Animated.Text>
@@ -106,7 +111,7 @@ export function DiceResultPopup({
       <View style={styles.actions}>
         <Pressable
           onPress={onDismiss}
-          hitSlop={12}
+          hitSlop={16}
           accessibilityRole="button"
           accessibilityLabel={cheer}
           style={({ pressed }) => [
@@ -124,15 +129,17 @@ export function DiceResultPopup({
 const styles = StyleSheet.create({
   cornerTL: {
     position: 'absolute',
-    top: 14,
-    left: 14,
+    top: 16,
+    left: 16,
     alignItems: 'center',
+    zIndex: 2,
   },
   cornerBR: {
     position: 'absolute',
-    bottom: 14,
-    right: 14,
+    bottom: 16,
+    right: 16,
     alignItems: 'center',
+    zIndex: 2,
   },
   pipNum: {
     fontSize: 18,
@@ -143,13 +150,16 @@ const styles = StyleSheet.create({
   pipSuit: { fontSize: 14, marginTop: -2 },
   pipFlip: { transform: [{ rotate: '180deg' }] },
   center: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    minHeight: 220,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
+    paddingHorizontal: spacing[2],
   },
   badge: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 2.5,
     color: affect.delight.solid,
@@ -158,22 +168,24 @@ const styles = StyleSheet.create({
     fontSize: 72,
     fontWeight: '900',
     color: affect.delight.text,
-    lineHeight: 78,
+    lineHeight: 80,
+    includeFontPadding: false,
   },
   sub: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: neu.muted,
     textAlign: 'center',
-    paddingHorizontal: spacing[2],
   },
   actions: {
-    paddingHorizontal: spacing[2],
-    paddingBottom: spacing[2],
+    flexShrink: 0,
+    paddingHorizontal: spacing[1],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[1],
   },
   btnPrimary: {
     backgroundColor: affect.delight.solid,
-    minHeight: 50,
+    height: 52,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',

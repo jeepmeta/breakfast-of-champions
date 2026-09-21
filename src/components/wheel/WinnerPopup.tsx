@@ -16,6 +16,9 @@ import { spacing, radius } from '../../theme/tokens';
 import { SPRINGS } from '../../constants/springs';
 import { haptic } from '../../lib/haptics';
 
+const CARD_W = 256;
+const CARD_H = 400;
+
 type Props = {
   visible: boolean;
   emoji: string;
@@ -63,8 +66,8 @@ export function WinnerPopup({
     <ResultPopup
       visible={visible}
       onDismiss={onClose}
-      width={248}
-      height={380}
+      width={CARD_W}
+      height={CARD_H}
       borderColor={affect.reward.solidStrong}
     >
       <View style={styles.cornerTL} pointerEvents="none">
@@ -74,11 +77,20 @@ export function WinnerPopup({
         <Text style={[styles.pipEmoji, styles.pipFlip]}>{pip}</Text>
       </View>
 
-      <Animated.View style={[styles.center, centerStyle]} pointerEvents="none">
+      <Animated.View
+        style={[styles.center, centerStyle]}
+        pointerEvents="none"
+      >
         <Text style={styles.badge}>YOU GOT</Text>
         <Text style={styles.emoji}>{emoji}</Text>
-        <Text style={styles.label}>{label}</Text>
-        {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
+        <Text style={styles.label} numberOfLines={2}>
+          {label}
+        </Text>
+        {subtitle ? (
+          <Text style={styles.sub} numberOfLines={2}>
+            {subtitle}
+          </Text>
+        ) : null}
       </Animated.View>
 
       <View style={styles.actions}>
@@ -88,7 +100,7 @@ export function WinnerPopup({
               haptic.medium();
               onSpinAgain();
             }}
-            hitSlop={10}
+            hitSlop={12}
             style={({ pressed }) => [
               styles.btnPrimary,
               pressed && styles.btnPressed,
@@ -99,7 +111,7 @@ export function WinnerPopup({
         ) : null}
         <Pressable
           onPress={onClose}
-          hitSlop={10}
+          hitSlop={12}
           style={({ pressed }) => [
             styles.btnGhost,
             pressed && styles.btnPressed,
@@ -113,29 +125,44 @@ export function WinnerPopup({
 }
 
 const styles = StyleSheet.create({
-  cornerTL: { position: 'absolute', top: 14, left: 14 },
-  cornerBR: { position: 'absolute', bottom: 14, right: 14 },
+  cornerTL: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 2,
+  },
+  cornerBR: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    zIndex: 2,
+  },
   pipEmoji: { fontSize: 22 },
   pipFlip: { transform: [{ rotate: '180deg' }] },
   center: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    minHeight: 220,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
+    paddingHorizontal: spacing[3],
   },
   badge: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 2.5,
     color: affect.reward.text,
   },
-  emoji: { fontSize: 56, marginVertical: spacing[1] },
+  emoji: {
+    fontSize: 56,
+    lineHeight: 64,
+  },
   label: {
     fontSize: 24,
     fontWeight: '900',
     color: neu.text,
     textAlign: 'center',
-    paddingHorizontal: spacing[2],
   },
   sub: {
     fontSize: 13,
@@ -144,19 +171,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actions: {
-    paddingHorizontal: spacing[2],
-    paddingBottom: spacing[2],
+    flexShrink: 0,
+    paddingHorizontal: spacing[1],
+    paddingTop: spacing[2],
     gap: spacing[2],
   },
   btnPrimary: {
     backgroundColor: affect.reward.solid,
-    minHeight: 50,
+    height: 52,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnGhost: {
-    minHeight: 46,
+    height: 48,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
