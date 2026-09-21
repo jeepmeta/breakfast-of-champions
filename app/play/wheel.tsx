@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlayChrome } from '../../src/components/play/PlayChrome';
@@ -25,6 +24,7 @@ import { useSessionLists } from '../../src/session/SessionListsContext';
 import { colors } from '../../src/theme/colors';
 import { neu, affect, elevationStyle } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
+import { haptic } from '../../src/lib/haptics';
 
 export default function PlayWheelScreen() {
   const [topicId, setTopicId] = useState<WheelTopicId>('eat');
@@ -58,7 +58,7 @@ export default function PlayWheelScreen() {
 
   const selectTopic = (id: WheelTopicId) => {
     if (id === topicId || spinning || popupOpen) return;
-    void Haptics.selectionAsync().catch(() => undefined);
+    haptic.selection();
     const next = getTopic(id);
     setTopicId(id);
     setVariationId(next.variations[0].id);
@@ -70,7 +70,7 @@ export default function PlayWheelScreen() {
 
   const selectVariation = (id: WheelVariationId) => {
     if (id === variationId || spinning || popupOpen) return;
-    void Haptics.selectionAsync().catch(() => undefined);
+    haptic.selection();
     setVariationId(id);
     setWinner(null);
     setPopupOpen(false);
@@ -104,9 +104,7 @@ export default function PlayWheelScreen() {
   const openWheelRoom = async () => {
     if (busy || isLoading) return;
     setBusy(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-      () => undefined,
-    );
+    haptic.medium();
     try {
       const { code } = await create({ displayName: 'You' });
       upsertRoom({ code, title: `Wheel ${code}`, role: 'host' });
@@ -122,7 +120,7 @@ export default function PlayWheelScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <NoiseOverlay opacity={0.04} frequency={0.85} />
+      <NoiseOverlay opacity={0.04} />
       <PlayChrome title="Wafflr Wheel" subtitle={variation.question} />
 
       <View style={styles.stageWrap}>
