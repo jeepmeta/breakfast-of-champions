@@ -20,7 +20,7 @@ import {
   type WheelVariationId,
 } from '../../src/data/wheel-topics';
 import { useRoom } from '../../src/room/RoomContext';
-import { useSessionLists } from '../../src/session/SessionListsContext';
+import { useSessionListsStore } from '../../src/session/sessionListsStore';
 import { colors } from '../../src/theme/colors';
 import { neu, affect, elevationStyle } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
@@ -37,7 +37,7 @@ export default function PlayWheelScreen() {
   const [catalogKey, setCatalogKey] = useState(0);
 
   const { create, isLoading } = useRoom();
-  const { upsertRoom } = useSessionLists();
+  const upsertRoom = useSessionListsStore((s) => s.upsertRoom);
 
   const topic = useMemo(() => getTopic(topicId), [topicId]);
   const variation = useMemo(
