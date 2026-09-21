@@ -1,26 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import * as Haptics from 'expo-haptics';
 
 import { PHYSICS_DICE_HTML } from './physicsDiceHtml';
 import { DiceResultPopup } from './DiceResultPopup';
 import { InstantPressable } from '../../navigation/InstantPressable';
 import { neu, affect } from '../../theme/neumorph';
 import { spacing, radius } from '../../theme/tokens';
+import { haptic } from '../../lib/haptics';
 
 export type DiceCount = 1 | 2 | 3 | 4 | 5 | 6;
 
 type RollerProps = {
   count?: DiceCount;
-  /** Called after a result is dismissed and the table resets. */
   onCountConsumed?: () => void;
 };
 
-/**
- * Physics stage + result modal.
- * WebView handles swipe-to-roll; RN owns popup + reset bridge.
- */
+/** Physics stage + result modal. WebView owns swipe-to-roll. */
 export function DiceRoller({ count = 2, onCountConsumed }: RollerProps) {
   const webRef = useRef<WebView>(null);
   const [rolling, setRolling] = useState(false);
@@ -36,7 +32,6 @@ export function DiceRoller({ count = 2, onCountConsumed }: RollerProps) {
     webRef.current?.injectJavaScript(`${js}\ntrue;`);
   }, []);
 
-  // Sync dice count when idle only (avoid mid-roll respawn)
   useEffect(() => {
     if (!ready || rollingRef.current || popupOpen) return;
     inject(`window.wafflrSetCount && window.wafflrSetCount(${count})`);
@@ -69,9 +64,7 @@ export function DiceRoller({ count = 2, onCountConsumed }: RollerProps) {
           setPopupOpen(false);
           setTotal(null);
           setDetails([]);
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-            () => undefined,
-          );
+          haptic.medium();
           break;
 
         case 'result':
@@ -80,9 +73,7 @@ export function DiceRoller({ count = 2, onCountConsumed }: RollerProps) {
           setTotal(typeof data.total === 'number' ? data.total : 0);
           setDetails(Array.isArray(data.details) ? data.details : []);
           setPopupOpen(true);
-          void Haptics.notificationAsync(
-            Haptics.NotificationFeedbackType.Success,
-          ).catch(() => undefined);
+          haptic.success();
           break;
 
         case 'idle':
@@ -103,7 +94,6 @@ export function DiceRoller({ count = 2, onCountConsumed }: RollerProps) {
     setDetails([]);
     rollingRef.current = false;
     setRolling(false);
-    // Reset table after modal starts closing so WebView is interactive again
     requestAnimationFrame(() => {
       inject('window.wafflrReset && window.wafflrReset()');
     });
@@ -130,12 +120,9 @@ export function DiceRoller({ count = 2, onCountConsumed }: RollerProps) {
           javaScriptEnabled
           domStorageEnabled
           setSupportMultipleWindows={false}
-          // Keep swipe gestures inside the WebView on Android
           nestedScrollEnabled={false}
-          // Avoid Android touch bleed under Modal
           pointerEvents={popupOpen ? 'none' : 'auto'}
           containerStyle={styles.webContainer}
-          // Silence Android chrome
           {...(Platform.OS === 'android'
             ? { androidLayerType: 'hardware' as const }
             : {})}

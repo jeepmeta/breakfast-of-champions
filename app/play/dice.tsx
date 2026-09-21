@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlayChrome } from '../../src/components/play/PlayChrome';
@@ -18,6 +17,7 @@ import { useSessionLists } from '../../src/session/SessionListsContext';
 import { colors } from '../../src/theme/colors';
 import { neu, affect, elevationStyle } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
+import { haptic } from '../../src/lib/haptics';
 
 export default function PlayDiceScreen() {
   const { create, isLoading } = useRoom();
@@ -28,11 +28,7 @@ export default function PlayDiceScreen() {
   const openDiceRoom = async () => {
     if (busy || isLoading) return;
     setBusy(true);
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // ignore
-    }
+    haptic.medium();
     try {
       const { code } = await create({ displayName: 'You' });
       upsertRoom({ code, title: `Dice ${code}`, role: 'host' });
@@ -46,7 +42,7 @@ export default function PlayDiceScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <NoiseOverlay opacity={0.04} frequency={0.85} />
+      <NoiseOverlay opacity={0.04} />
       <PlayChrome title="Dice Roller" subtitle="Swipe the table to cast" />
 
       <View style={styles.stageWrap}>
