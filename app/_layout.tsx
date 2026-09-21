@@ -14,8 +14,6 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { RoomProvider } from '../src/room/RoomContext';
-import { SessionListsProvider } from '../src/session/SessionListsContext';
-import { SubscriptionProvider } from '../src/subscription/SubscriptionContext';
 import {
   stackScreenDefaults,
   playDiceOptions,
@@ -47,34 +45,26 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SubscriptionProvider>
-        <SessionListsProvider>
-          <RoomProvider>
-            <StatusBar style="dark" />
-            <Stack screenOptions={stackScreenDefaults}>
-              <Stack.Screen name="index" options={{ animation: 'none' }} />
-              <Stack.Screen name="play/dice" options={playDiceOptions} />
-              <Stack.Screen name="play/wheel" options={playWheelOptions} />
-              <Stack.Screen name="room/[code]" options={roomFromLeftOptions} />
-              <Stack.Screen
-                name="bracket/[code]"
-                options={roomFromRightOptions}
-              />
-              <Stack.Screen name="profile" options={profileOptions} />
-              <Stack.Screen name="settings" options={settingsOptions} />
-              {/* Legacy redirects */}
-              <Stack.Screen
-                name="solo/wheel"
-                options={{ animation: 'none', headerShown: false }}
-              />
-              <Stack.Screen
-                name="(tabs)"
-                options={{ animation: 'none', headerShown: false }}
-              />
-            </Stack>
-          </RoomProvider>
-        </SessionListsProvider>
-      </SubscriptionProvider>
+      <RoomProvider>
+        <StatusBar style="dark" />
+        <Stack screenOptions={stackScreenDefaults}>
+          <Stack.Screen name="index" options={{ animation: 'none' }} />
+          <Stack.Screen name="play/dice" options={playDiceOptions} />
+          <Stack.Screen name="play/wheel" options={playWheelOptions} />
+          <Stack.Screen name="room/[code]" options={roomFromLeftOptions} />
+          <Stack.Screen name="bracket/[code]" options={roomFromRightOptions} />
+          <Stack.Screen name="profile" options={profileOptions} />
+          <Stack.Screen name="settings" options={settingsOptions} />
+          <Stack.Screen
+            name="solo/wheel"
+            options={{ animation: 'none', headerShown: false }}
+          />
+          <Stack.Screen
+            name="(tabs)"
+            options={{ animation: 'none', headerShown: false }}
+          />
+        </Stack>
+      </RoomProvider>
     </GestureHandlerRootView>
   );
 }

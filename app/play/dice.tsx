@@ -13,7 +13,7 @@ import {
 import { InstantPressable } from '../../src/navigation/InstantPressable';
 import { NoiseOverlay } from '../../src/components/ui/NoiseOverlay';
 import { useRoom } from '../../src/room/RoomContext';
-import { useSessionLists } from '../../src/session/SessionListsContext';
+import { useSessionLists } from '../../src/session/sessionListsStore';
 import { colors } from '../../src/theme/colors';
 import { neu, affect, elevationStyle } from '../../src/theme/neumorph';
 import { spacing, radius } from '../../src/theme/tokens';
@@ -21,7 +21,7 @@ import { haptic } from '../../src/lib/haptics';
 
 export default function PlayDiceScreen() {
   const { create, isLoading } = useRoom();
-  const { upsertRoom } = useSessionLists();
+  const upsertRoom = useSessionListsStoreSelectUpsert();
   const [count, setCount] = useState<DiceCount>(2);
   const [busy, setBusy] = useState(false);
 
@@ -68,6 +68,10 @@ export default function PlayDiceScreen() {
       <AdBanner />
     </SafeAreaView>
   );
+}
+
+function useSessionListsStoreSelectUpsert() {
+  return useSessionLists().upsertRoom;
 }
 
 const styles = StyleSheet.create({

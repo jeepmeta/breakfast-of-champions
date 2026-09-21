@@ -1,36 +1,12 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+/**
+ * @deprecated Use subscriptionStore — re-exports for existing imports.
+ */
+export {
+  useSubscription,
+  useSubscriptionStore,
+} from './subscriptionStore';
 
-type Ctx = {
-  isSubscribed: boolean;
-  setSubscribed: (v: boolean) => void;
-};
-
-const SubscriptionContext = createContext<Ctx | null>(null);
-
-/** Local subscription gate — ads hidden when true. */
-export function SubscriptionProvider({ children }: { children: ReactNode }) {
-  const [isSubscribed, setSubscribed] = useState(false);
-  const value = useMemo(
-    () => ({ isSubscribed, setSubscribed }),
-    [isSubscribed],
-  );
-  return (
-    <SubscriptionContext.Provider value={value}>
-      {children}
-    </SubscriptionContext.Provider>
-  );
-}
-
-export function useSubscription() {
-  const ctx = useContext(SubscriptionContext);
-  if (!ctx) {
-    throw new Error('useSubscription must be used within SubscriptionProvider');
-  }
-  return ctx;
+/** No-op provider — store needs no React tree. */
+export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
+  return children as React.ReactElement;
 }
