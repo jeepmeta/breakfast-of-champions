@@ -1,35 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  FlatList,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+import { View, Text, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoom } from '../../src/room/RoomContext';
-import type { Participant } from '../../src/types/room';
 import { isSwipeMatchState } from '../../src/types/swipe';
 import { isGroupWheelState } from '../../src/types/group-wheel';
-import { SwipeDeck } from '../../src/components/swipe/SwipeDeck';
-import {
-  WafflrWheel,
-  type WheelSegment,
-} from '../../src/components/wheel/WafflrWheel';
-import { ConfettiBurst } from '../../src/components/celebration/ConfettiBurst';
-import { LobbyPicker } from '../../src/components/lobby/LobbyPicker';
 import { PlayChrome } from '../../src/components/play/PlayChrome';
 import { AdBanner } from '../../src/components/ads/AdBanner';
-import { getCatalogItems, type CatalogId, type CatalogItem } from '../../src/data/catalogs';
-import { type PlayableMode, modesForPlayerCount } from '../../src/constants/game-modes';
+import {
+  getCatalogItems,
+  type CatalogId,
+  type CatalogItem,
+} from '../../src/data/catalogs';
+import {
+  type PlayableMode,
+  modesForPlayerCount,
+} from '../../src/constants/game-modes';
+import type { WheelSegment } from '../../src/components/wheel/WafflrWheel';
+import { RoomLobby } from '../../src/screens/room/RoomLobby';
+import {
+  RoomSwipe,
+  RoomSwipeWaiting,
+  RoomSwipeCelebrate,
+} from '../../src/screens/room/RoomSwipe';
+import { RoomGroupWheel } from '../../src/screens/room/RoomGroupWheel';
 import { colors } from '../../src/theme/colors';
-import { neu } from '../../src/theme/neumorph';
-import { spacing } from '../../src/theme/tokens';
 import { roomStyles as styles } from '../../src/screens/roomStyles';
+import { haptic } from '../../src/lib/haptics';
 
 export default function RoomScreen() {
   const { code: routeCode } = useLocalSearchParams<{ code: string }>();
@@ -178,38 +176,15 @@ export default function RoomScreen() {
       .sort((a, b) => b.wins - a.wins);
   }, [wheelState, room]);
 
-  const onToggleReady = async () => {
-    if (!self) return;
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // ignore
-    }
-    await setReady(!self.is_ready);
-  };
-
   const onLeave = async () => {
     await leave();
     router.replace('/');
   };
 
-  const onAddGuest = async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // ignore
-    }
-    await addGuest();
-  };
-
   const onLobbyStart = async () => {
     if (starting) return;
     setStarting(true);
-    try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      // ignore
-    }
+    haptic.success();
     const items = getCatalogItems(catalogId);
     try {
       if (modeId === 'swipe_match') await startGame(items);
@@ -227,61 +202,6 @@ export default function RoomScreen() {
     } finally {
       completingRef.current = false;
     }
-  };
-
-  const readyCount = room?.participants.filter((p) => p.is_ready).length ?? 0;
-  const total = room?.participants.length ?? 0;
-
-  const renderParticipant = ({ item }: { item: Participant }) => {
-    const isSelfRow = item.id === selfId;
-    const wins = wheelState?.tallies[item.id];
-    return (
-      <View style={styles.participantRow}>
-        <View style={styles.participantLeft}>
-          <View
-            style={[
-              styles.avatar,
-              {
-                backgroundColor: item.is_host
-                  ? colors.brand.amber[500]
-                  : colors.brand.emerald[500],
-              },
-            ]}
-          >
-            <Text style={styles.avatarText}>
-              {item.display_name.slice(0, 1).toUpperCase()}
-            </Text>
-          </View>
-          <View>
-            <Text style={styles.name}>
-              {item.display_name}
-              {isSelfRow ? ' (you)' : ''}
-            </Text>
-            <Text style={styles.meta}>
-              {item.is_host ? 'Host' : 'Guest'}
-              {typeof wins === 'number'
-                ? ` · ${wins} win${wins === 1 ? '' : 's'}`
-                : ''}
-            </Text>
-          </View>
-        </View>
-        <View
-          style={[
-            styles.readyPill,
-            item.is_ready ? styles.readyPillOn : styles.readyPillOff,
-          ]}
-        >
-          <Text
-            style={[
-              styles.readyPillText,
-              item.is_ready ? styles.readyPillTextOn : styles.readyPillTextOff,
-            ]}
-          >
-            {item.is_ready ? 'Ready' : 'Waiting'}
-          </Text>
-        </View>
-      </View>
-    );
   };
 
   if (!room && isLoading) {
@@ -305,7 +225,13 @@ export default function RoomScreen() {
             own room.
           </Text>
           <Pressable onPress={() => router.replace('/')} style={styles.back}>
-            <Text style={{ color: colors.brand.amber[600], fontSize: 16, fontWeight: '800' }}>
+            <Text
+              style={{
+                color: colors.brand.amber[600],
+                fontSize: 16,
+                fontWeight: '800',
+              }}
+            >
               ← Home
             </Text>
           </Pressable>
@@ -321,97 +247,28 @@ export default function RoomScreen() {
 
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <PlayChrome title="Group Wheel" subtitle={code} />
-        <ConfettiBurst active={celebrating && !!winnerDisplay} />
-
-        {celebrating && winnerDisplay ? (
-          <View style={styles.winnerOverlay} pointerEvents="box-none">
-            <View style={styles.winnerCard}>
-              <Text style={styles.winnerCardEmoji}>{winnerDisplay.emoji}</Text>
-              <Text style={styles.winnerCardName}>{winnerDisplay.name}</Text>
-              <Text style={styles.winnerCardSub}>wins this round</Text>
-              {isHost ? (
-                <Pressable
-                  onPress={() => void nextWheelSpin()}
-                  style={({ pressed }) => [
-                    styles.winnerCardBtn,
-                    { opacity: pressed ? 0.9 : 1 },
-                  ]}
-                >
-                  <Text style={styles.winnerCardBtnText}>Spin again</Text>
-                </Pressable>
-              ) : (
-                <Text style={[styles.startHint, { marginTop: spacing[3] }]}>
-                  Waiting for host…
-                </Text>
-              )}
-            </View>
-          </View>
-        ) : null}
-
-        <ScrollView
-          contentContainerStyle={styles.wheelScroll}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={[styles.hint, { marginBottom: spacing[3] }]}>
-            Spin the catalog · host spins
-          </Text>
-
-          <View style={styles.stage}>
-            <WafflrWheel
-              segments={wheelSegments}
-              size={280}
-              hideSpinButton
-              hideResult
-              externalSpin={externalSpin}
-              onSpinEnd={() => {
-                void onWheelSpinEnd();
-              }}
-            />
-          </View>
-
-          <View style={styles.wheelControls}>
-            {isHost && wheelState.phase === 'ready' ? (
-              <Pressable
-                onPress={() => void hostSpinWheel()}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  { opacity: pressed ? 0.9 : 1, width: '100%' },
-                ]}
-              >
-                <Text style={styles.primaryBtnText}>Spin the wheel</Text>
-              </Pressable>
-            ) : null}
-
-            {wheelState.phase === 'spinning' ? (
-              <Text style={styles.startHint}>Spinning…</Text>
-            ) : null}
-
-            {!isHost && wheelState.phase === 'ready' ? (
-              <Text style={styles.startHint}>Waiting for host to spin…</Text>
-            ) : null}
-          </View>
-
-          <View style={styles.tallyBox}>
-            <Text style={styles.tallySectionLabel}>Scoreboard</Text>
-            <View style={styles.tallyChips}>
-              {tallyList.map((row) => (
-                <View key={row.id} style={styles.tallyChip}>
-                  <Text style={styles.tallyChipName} numberOfLines={1}>
-                    {row.name}
-                  </Text>
-                  <Text style={styles.tallyChipWins}>{row.wins}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <Pressable onPress={onLeave} style={[styles.back, { marginTop: spacing[4] }]}>
-            <Text style={{ color: neu.muted, fontSize: 15, fontWeight: '700' }}>
-              Leave room
-            </Text>
-          </Pressable>
-        </ScrollView>
+        <RoomGroupWheel
+          code={code}
+          isHost={isHost}
+          phase={wheelState.phase}
+          celebrating={celebrating}
+          winner={winnerDisplay}
+          segments={wheelSegments}
+          externalSpin={externalSpin}
+          tallyList={tallyList}
+          onSpinEnd={() => {
+            void onWheelSpinEnd();
+          }}
+          onHostSpin={() => {
+            void hostSpinWheel();
+          }}
+          onSpinAgain={() => {
+            void nextWheelSpin();
+          }}
+          onLeave={() => {
+            void onLeave();
+          }}
+        />
         <AdBanner />
       </SafeAreaView>
     );
@@ -424,29 +281,16 @@ export default function RoomScreen() {
   ) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <PlayChrome title="Match!" subtitle={code} />
-        <View style={styles.celebrate}>
-          <Text style={styles.celebrateEmoji}>{matchedItem.emoji}</Text>
-          <Text style={styles.celebrateTitle}>It is a match!</Text>
-          <Text style={styles.celebrateItem}>{matchedItem.title}</Text>
-          <Text style={styles.hint}>
-            Everyone agreed. Decision locked in under 60 seconds.
-          </Text>
-          <Pressable
-            onPress={dismissMatch}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
-          >
-            <Text style={styles.primaryBtnText}>Keep swiping</Text>
-          </Pressable>
-          <Pressable onPress={onLeave} style={styles.back}>
-            <Text style={{ color: neu.muted, fontSize: 16, fontWeight: '700' }}>
-              Done · Leave room
-            </Text>
-          </Pressable>
-        </View>
+        <RoomSwipeCelebrate
+          code={code}
+          item={matchedItem}
+          onKeepSwiping={() => {
+            void dismissMatch();
+          }}
+          onLeave={() => {
+            void onLeave();
+          }}
+        />
         <AdBanner />
       </SafeAreaView>
     );
@@ -456,18 +300,12 @@ export default function RoomScreen() {
     if (!nextItem) {
       return (
         <SafeAreaView style={styles.container} edges={['top']}>
-          <PlayChrome title="Swipe Match" subtitle={code} />
-          <View style={styles.body}>
-            <Text style={styles.title}>Waiting on others…</Text>
-            <Text style={styles.hint}>
-              You finished the deck. Hang tight for a match.
-            </Text>
-            <Pressable onPress={onLeave} style={styles.back}>
-              <Text style={{ color: neu.muted, fontSize: 16, fontWeight: '700' }}>
-                Leave room
-              </Text>
-            </Pressable>
-          </View>
+          <RoomSwipeWaiting
+            code={code}
+            onLeave={() => {
+              void onLeave();
+            }}
+          />
           <AdBanner />
         </SafeAreaView>
       );
@@ -475,12 +313,8 @@ export default function RoomScreen() {
 
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <PlayChrome title="Swipe Match" subtitle={code} />
-        <View style={styles.swipeHeader}>
-          <Text style={styles.swipeTitle}>What are we getting?</Text>
-        </View>
-        <SwipeDeck
-          key={nextItem.id}
+        <RoomSwipe
+          code={code}
           item={nextItem.payload as CatalogItem}
           remaining={remaining}
           vetoEnabled={room.settings.veto_enabled}
@@ -508,8 +342,14 @@ export default function RoomScreen() {
               ? `Matches: ${swipeState.matches.length}`
               : 'No mutual matches this round.'}
           </Text>
-          <Pressable onPress={onLeave} style={styles.back}>
-            <Text style={{ color: colors.brand.amber[600], fontSize: 16, fontWeight: '800' }}>
+          <Pressable onPress={() => void onLeave()} style={styles.back}>
+            <Text
+              style={{
+                color: colors.brand.amber[600],
+                fontSize: 16,
+                fontWeight: '800',
+              }}
+            >
               ← Home
             </Text>
           </Pressable>
@@ -519,83 +359,35 @@ export default function RoomScreen() {
     );
   }
 
-  // Lobby
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <PlayChrome title="Room" subtitle={code} />
-      <View style={styles.header}>
-        <Text style={styles.code}>{code}</Text>
-        <Text style={styles.readySummary}>
-          {readyCount}/{total} ready
-        </Text>
-        <Text style={styles.live}>Live</Text>
-      </View>
-
-      <FlatList
-        data={room.participants}
-        keyExtractor={(p) => p.id}
-        renderItem={renderParticipant}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={
-          <Text style={styles.sectionLabel}>Players</Text>
-        }
+      <RoomLobby
+        code={code}
+        participants={room.participants}
+        selfId={selfId}
+        self={self}
+        isHost={isHost}
+        everyoneReady={everyoneReady}
+        catalogId={catalogId}
+        modeId={modeId}
+        starting={starting}
+        onCatalogChange={setCatalogId}
+        onModeChange={setModeId}
+        onToggleReady={() => {
+          if (!self) return;
+          void setReady(!self.is_ready);
+        }}
+        onAddGuest={() => {
+          void addGuest();
+        }}
+        onStart={() => {
+          void onLobbyStart();
+        }}
+        onLeave={() => {
+          void onLeave();
+        }}
       />
-
-      <View style={styles.footer}>
-        <Pressable
-          onPress={() => void onToggleReady()}
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            {
-              backgroundColor: self?.is_ready
-                ? colors.brand.emerald[400]
-                : colors.brand.amber[400],
-              opacity: pressed ? 0.9 : 1,
-            },
-          ]}
-        >
-          <Text style={styles.primaryBtnText}>
-            {self?.is_ready ? 'Ready ✓' : 'I’m ready'}
-          </Text>
-        </Pressable>
-
-        {isHost ? (
-          <Pressable
-            onPress={() => void onAddGuest()}
-            style={({ pressed }) => [
-              styles.secondaryBtn,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
-          >
-            <Text style={styles.secondaryBtnText}>Add guest seat</Text>
-          </Pressable>
-        ) : null}
-
-        {isHost ? (
-          <View style={styles.lobbyWrap}>
-            <LobbyPicker
-              playerCount={room.participants.length}
-              catalogId={catalogId}
-              modeId={modeId}
-              onCatalogChange={setCatalogId}
-              onModeChange={setModeId}
-              onStart={() => void onLobbyStart()}
-              canStart={everyoneReady || room.participants.length === 1}
-              starting={starting}
-            />
-          </View>
-        ) : (
-          <Text style={[styles.startHint, { textAlign: 'center' }]}>
-            Waiting for host to pick a game…
-          </Text>
-        )}
-
-        <Pressable onPress={onLeave} style={styles.back}>
-          <Text style={{ color: neu.muted, fontSize: 16, fontWeight: '700' }}>
-            Leave room
-          </Text>
-        </Pressable>
-      </View>
       <AdBanner />
     </SafeAreaView>
   );

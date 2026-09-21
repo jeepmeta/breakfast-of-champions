@@ -1,24 +1,28 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 
 import { WafflrMark } from '../brand';
 import { colors } from '../../theme/colors';
 import { neu, neuPill } from '../../theme/neumorph';
 import { spacing } from '../../theme/tokens';
+import { haptic } from '../../lib/haptics';
 
 type Props = {
   title: string;
   subtitle?: string;
-  /** Optional right-side action instead of Back */
   rightLabel?: string;
   onRightPress?: () => void;
 };
 
 /** Shared top bar — mark + title + back/action pill. */
-export function PlayChrome({ title, subtitle, rightLabel, onRightPress }: Props) {
+export function PlayChrome({
+  title,
+  subtitle,
+  rightLabel,
+  onRightPress,
+}: Props) {
   const goBack = () => {
-    void Haptics.selectionAsync().catch(() => undefined);
+    haptic.selection();
     if (onRightPress && rightLabel) {
       onRightPress();
       return;
@@ -46,7 +50,10 @@ export function PlayChrome({ title, subtitle, rightLabel, onRightPress }: Props)
       <Pressable
         onPress={goBack}
         hitSlop={10}
-        style={({ pressed }) => [styles.backPill, { opacity: pressed ? 0.85 : 1 }]}
+        style={({ pressed }) => [
+          styles.backPill,
+          { opacity: pressed ? 0.85 : 1 },
+        ]}
         accessibilityRole="button"
         accessibilityLabel={rightLabel ?? 'Go back'}
       >

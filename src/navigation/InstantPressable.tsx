@@ -6,9 +6,9 @@ import Animated, {
   withSpring,
   withSequence,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 
 import { SPRINGS } from '../constants/springs';
+import { haptic } from '../lib/haptics';
 
 const AnimatedGHPressable = Animated.createAnimatedComponent(GHPressable);
 
@@ -23,14 +23,12 @@ type Props = {
   accessibilityRole?: ComponentProps<typeof GHPressable>['accessibilityRole'];
 };
 
-/**
- * Gesture-handler Pressable + bounce scale + optional haptic.
- */
+/** Gesture-handler Pressable + bounce scale + optional haptic. */
 export function InstantPressable({
   children,
   onPress,
   disabled,
-  haptic = true,
+  haptic: doHaptic = true,
   style,
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -49,18 +47,13 @@ export function InstantPressable({
         scale.value = withSpring(0.94, SPRINGS.stiff);
       }}
       onPressOut={() => {
-        // Slight overshoot bounce on release
         scale.value = withSequence(
           withSpring(1.04, SPRINGS.bouncy),
           withSpring(1, SPRINGS.snappy),
         );
       }}
       onPress={() => {
-        if (haptic) {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-            () => undefined,
-          );
-        }
+        if (doHaptic) haptic.light();
         onPress?.();
       }}
       style={[animStyle, style]}
